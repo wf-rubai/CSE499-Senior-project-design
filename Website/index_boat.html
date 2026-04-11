@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BoatTrack — Autonomous USV Routing</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&family=Rajdhani:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+
+    <!-- ── ROOT + RESET ── -->
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0
+        }
+
+        :root {
+            --bg: #08090d;
+            --surface: #0e1018;
+            --surface2: #141720;
+            --border: rgba(100, 180, 255, 0.1);
+            --border2: rgba(100, 180, 255, 0.18);
+            --text: #d4e8ff;
+            --muted: #5a7a9a;
+            --accent: #00d4ff;
+            --glow: rgba(0, 212, 255, 0.15);
+        }
+
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 0, 0, 0.025) 2px, rgba(0, 0, 0, 0.025) 4px);
+            pointer-events: none;
+            z-index: 9999
+        }
+    </style>
+
+    <!-- ── HEADER ── -->
+    <style>
+        header {
+            padding: 12px 24px;
+            border-bottom: 1px solid var(--border2);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            background: var(--surface);
+            flex-shrink: 0;
+            position: relative
+        }
+
+        header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            opacity: 0.4
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center
+        }
+
+        .logo-icon svg {
+            filter: drop-shadow(0 0 6px var(--accent))
+        }
+
+        .logo-text h1 {
+            font-family: 'Orbitron', monospace;
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 0.15em;
+            color: var(--accent);
+            text-shadow: 0 0 20px rgba(0, 200, 180, 0.5)
+        }
+
+        .logo-text p {
+            font-size: 11px;
+            color: var(--muted);
+            letter-spacing: 0.08em;
+            text-transform: uppercase
+        }
+
+        .header-status {
+            display: flex;
+            align-items: center;
+            gap: 20px
+        }
+
+        .status-chip {
+            font-size: 11px;
+            font-family: 'Orbitron', monospace;
+            color: var(--muted);
+            letter-spacing: 0.06em
+        }
+
+        .status-chip span {
+            color: #00ff9d;
+            text-shadow: 0 0 8px rgba(0, 255, 200, 0.5)
+        }
+    </style>
+
+    <!-- ── LAYOUT ── -->
+    <style>
+        main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            overflow: hidden
+        }
+    </style>
+
+    <!-- ── SIDEBAR ── -->
+    <style>
+        aside {
+            background: var(--surface);
+            border-right: 1px solid var(--border2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden
+        }
+
+        .section-label {
+            padding: 12px 20px 8px;
+            font-size: 10px;
+            font-family: 'Orbitron', monospace;
+            letter-spacing: 0.15em;
+            color: var(--muted);
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--border)
+        }
+
+        .global-controls {
+            padding: 12px 16px;
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid var(--border)
+        }
+
+        .ctrl-btn {
+            flex: 1;
+            padding: 7px 6px;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid var(--border2);
+            background: transparent;
+            color: var(--muted)
+        }
+
+        .ctrl-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--glow)
+        }
+
+        .boat-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 0
+        }
+
+        .boat-list::-webkit-scrollbar {
+            width: 3px
+        }
+
+        .boat-list::-webkit-scrollbar-thumb {
+            background: var(--border2);
+            border-radius: 2px
+        }
+    </style>
+
+    <!-- ── BOAT CARD ── -->
+    <style>
+        .boat-card {
+            margin: 6px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--surface2);
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden
+        }
+
+        .boat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 3px;
+            height: 100%;
+            background: var(--boat-color, var(--accent));
+            opacity: 0.8
+        }
+
+        .boat-card:hover {
+            border-color: rgba(0, 200, 180, 0.3);
+            background: #111a20
+        }
+
+        .boat-card.path-visible {
+            border-color: var(--boat-color, var(--accent));
+            background: #111a20;
+            box-shadow: 0 0 12px -4px var(--boat-color, var(--accent))
+        }
+
+        .boat-card-inner {
+            padding: 10px 12px 10px 18px;
+            display: flex;
+            align-items: center;
+            gap: 12px
+        }
+
+        .boat-icon-wrap {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 1px solid;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            background: rgba(0, 0, 0, 0.3)
+        }
+
+        .boat-info {
+            flex: 1;
+            min-width: 0
+        }
+
+        .boat-name {
+            font-family: 'Orbitron', monospace;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis
+        }
+
+        .boat-meta {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 2px
+        }
+
+        .boat-actions {
+            display: flex;
+            gap: 4px;
+            align-items: center
+        }
+
+        .icon-btn {
+            width: 26px;
+            height: 26px;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+            color: var(--muted)
+        }
+
+        .icon-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent)
+        }
+
+        .swatch-btn {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: transform 0.15s, box-shadow 0.15s
+        }
+
+        .swatch-btn:hover {
+            transform: scale(1.2)
+        }
+    </style>
+
+    <!-- ── STATS ── -->
+    <style>
+        .stats {
+            margin-top: auto;
+            padding: 16px 24px;
+            border-top: 1px solid var(--border);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px
+        }
+
+        .stat-val {
+            font-size: 20px;
+            font-weight: 500;
+            font-family: 'Orbitron', monospace;
+            color: var(--accent)
+        }
+
+        .stat-lbl {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 2px
+        }
+    </style>
+
+    <!-- ── MAP ── -->
+    <style>
+        #map {
+            width: 100%;
+            height: 100%
+        }
+
+        .leaflet-container {
+            background: #080b0f !important
+        }
+
+        .leaflet-tile {
+            filter: brightness(0.4) saturate(0.25) hue-rotate(160deg)
+        }
+
+        .leaflet-control-zoom a {
+            background: #0d1117 !important;
+            color: #cceee8 !important;
+            border-color: rgba(0, 200, 180, 0.2) !important;
+            font-family: 'Orbitron', monospace !important
+        }
+
+        .leaflet-control-zoom a:hover {
+            background: #121820 !important
+        }
+
+        .leaflet-control-attribution {
+            background: rgba(8, 11, 15, 0.7) !important;
+            color: var(--muted) !important;
+            font-size: 9px !important
+        }
+
+        .leaflet-control-attribution a {
+            color: var(--muted) !important
+        }
+
+        .leaflet-tooltip {
+            background: var(--surface) !important;
+            border: 1px solid var(--border2) !important;
+            color: var(--text) !important;
+            font-family: 'Rajdhani', sans-serif !important;
+            font-size: 12px !important;
+            border-radius: 4px !important;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
+            white-space: nowrap
+        }
+    </style>
+
+    <!-- ── MODAL ── -->
+    <style>
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s
+        }
+
+        .modal-overlay.open {
+            opacity: 1;
+            pointer-events: all
+        }
+
+        .modal {
+            background: var(--surface);
+            border: 1px solid var(--border2);
+            border-radius: 10px;
+            padding: 24px;
+            width: 300px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 40px -10px var(--accent);
+            position: relative
+        }
+
+        .modal::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent)
+        }
+
+        .modal-title {
+            font-family: 'Orbitron', monospace;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            color: var(--accent);
+            margin-bottom: 4px
+        }
+
+        .modal-sub {
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 20px
+        }
+
+        .color-preview {
+            width: 100%;
+            height: 48px;
+            border-radius: 6px;
+            margin-bottom: 14px;
+            border: 1px solid var(--border2);
+            transition: background 0.15s
+        }
+
+        .modal-input-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px
+        }
+
+        .modal-input-row label {
+            font-size: 12px;
+            color: var(--muted);
+            width: 48px;
+            flex-shrink: 0
+        }
+
+        .modal-input-row input[type=color] {
+            width: 42px;
+            height: 32px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            padding: 0;
+            border-radius: 4px;
+            overflow: hidden
+        }
+
+        .modal-input-row input[type=text] {
+            flex: 1;
+            background: var(--surface2);
+            border: 1px solid var(--border2);
+            border-radius: 4px;
+            color: var(--text);
+            font-family: 'Orbitron', monospace;
+            font-size: 13px;
+            padding: 6px 10px;
+            letter-spacing: 0.08em;
+            outline: none;
+            transition: border-color 0.15s
+        }
+
+        .modal-input-row input[type=text]:focus {
+            border-color: var(--accent)
+        }
+
+        .presets-label {
+            font-size: 11px;
+            color: var(--muted);
+            margin-bottom: 8px;
+            letter-spacing: 0.06em
+        }
+
+        .presets {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+            margin-bottom: 18px
+        }
+
+        .preset-chip {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.15s, border-color 0.15s
+        }
+
+        .preset-chip:hover {
+            transform: scale(1.2)
+        }
+
+        .preset-chip.selected {
+            border-color: rgba(255, 255, 255, 0.7)
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 8px
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 9px;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.15s;
+            border: 1px solid var(--border2)
+        }
+
+        .modal-btn.confirm {
+            background: rgba(0, 200, 180, 0.15);
+            color: var(--accent);
+            border-color: var(--accent)
+        }
+
+        .modal-btn.confirm:hover {
+            background: rgba(0, 200, 180, 0.25)
+        }
+
+        .modal-btn.cancel {
+            background: transparent;
+            color: var(--muted)
+        }
+
+        .modal-btn.cancel:hover {
+            color: var(--text)
+        }
+    </style>
+
+    <!-- ── ANIMATIONS ── -->
+    <style>
+        @keyframes pulse-ring {
+            0% {
+                transform: scale(0.6);
+                opacity: 0.9
+            }
+
+            100% {
+                transform: scale(2.2);
+                opacity: 0
+            }
+        }
+
+        @keyframes spin-slow {
+            from {
+                transform: rotate(0deg)
+            }
+
+            to {
+                transform: rotate(360deg)
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div class="logo">
+            <div class="logo-icon">
+                <!-- Header boat icon -->
+                <svg width="32" height="32" viewBox="0 0 40 40">
+                    <circle cx="20" cy="20" r="17" fill="rgba(0,0,0,0.5)" stroke="var(--accent)" stroke-width="1.2"
+                        opacity="0.5" />
+                    <line x1="14" y1="18" x2="7" y2="16" stroke="var(--accent)" stroke-width="1.4"
+                        stroke-linecap="round" />
+                    <line x1="14" y1="21" x2="7" y2="23" stroke="var(--accent)" stroke-width="1.4"
+                        stroke-linecap="round" />
+                    <line x1="26" y1="18" x2="33" y2="16" stroke="var(--accent)" stroke-width="1.4"
+                        stroke-linecap="round" />
+                    <line x1="26" y1="21" x2="33" y2="23" stroke="var(--accent)" stroke-width="1.4"
+                        stroke-linecap="round" />
+                    <path d="M5 15.5 Q4 19.5 5 23.5 Q6.5 24.5 7 23.5 Q8 19.5 7 15.5 Q6.5 14.5 5 15.5Z"
+                        fill="rgba(0,200,180,0.12)" stroke="var(--accent)" stroke-width="1.1" />
+                    <path d="M35 15.5 Q36 19.5 35 23.5 Q33.5 24.5 33 23.5 Q32 19.5 33 15.5 Q33.5 14.5 35 15.5Z"
+                        fill="rgba(0,200,180,0.12)" stroke="var(--accent)" stroke-width="1.1" />
+                    <path d="M20 11 L26 16 L26 24 Q20 28 14 24 L14 16Z" fill="rgba(0,200,180,0.1)"
+                        stroke="var(--accent)" stroke-width="1.3" />
+                    <path d="M14 16 L20 11 L26 16" fill="rgba(0,200,180,0.18)" stroke="var(--accent)" stroke-width="1.3"
+                        stroke-linejoin="round" />
+                    <circle cx="20" cy="19.5" r="2.5" fill="var(--accent)" />
+                    <line x1="20" y1="11" x2="20" y2="8.5" stroke="var(--accent)" stroke-width="0.9"
+                        stroke-linecap="round" opacity="0.8" />
+                    <circle cx="20" cy="8" r="0.9" fill="var(--accent)" />
+                </svg>
+            </div>
+            <div class="logo-text">
+                <h1>BOATTRACK</h1>
+                <p>Autonomous USV Routing System</p>
+            </div>
+        </div>
+        <div class="header-status">
+            <div class="status-chip">VESSELS ACTIVE: <span id="boatCount">4</span></div>
+            <div class="status-chip">STATUS: <span>LIVE</span></div>
+        </div>
+    </header>
+
+    <main>
+        <aside>
+            <div class="section-label">Fleet Control</div>
+            <div class="global-controls">
+                <button class="ctrl-btn" onclick="showAllPaths()">Show All</button>
+                <button class="ctrl-btn" onclick="hideAllPaths()">Hide All</button>
+            </div>
+            <div class="section-label">Active Vessels</div>
+            <div class="boat-list" id="boatList"></div>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-val" id="statCount">4</div>
+                    <div class="stat-lbl">Vessels</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-val" id="statVisible">0</div>
+                    <div class="stat-lbl">Paths shown</div>
+                </div>
+            </div>
+        </aside>
+        <div id="map"></div>
+    </main>
+
+    <!-- COLOR PICKER MODAL -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <div class="modal-title">EDIT VESSEL COLOR</div>
+            <div class="modal-sub" id="modalBoatName">USV Alpha</div>
+            <div class="color-preview" id="colorPreview"></div>
+            <div class="modal-input-row">
+                <label>Picker</label>
+                <input type="color" id="colorPicker" oninput="onColorInput(this.value)">
+                <input type="text" id="colorHex" maxlength="7" placeholder="#00c8b4" oninput="onHexInput(this.value)">
+            </div>
+            <div class="presets-label">PRESETS</div>
+            <div class="presets" id="presets"></div>
+            <div class="modal-buttons">
+                <button class="modal-btn cancel" onclick="closeModal()">Cancel</button>
+                <button class="modal-btn confirm" onclick="applyColor()">Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script>
+        /* ══════════════════════
+           DATA
+           heading: 0=East, 90=North, 180=West, 270=South
+           (standard math convention, converted to CSS rotate below)
+        ══════════════════════ */
+        const boats = [
+            {
+                id: 'alpha', name: 'USV ALPHA', color: '#00d4ff',
+                waypoints: [
+                    { lat: 1.3521, lng: 103.8198, hdg: 45 },
+                    { lat: 1.4200, lng: 104.0000, hdg: 30 },
+                    { lat: 1.5000, lng: 104.2000, hdg: 10 },
+                    { lat: 1.6100, lng: 104.3500, hdg: 355 },
+                    { lat: 1.7000, lng: 104.5000, hdg: 340 },
+                ]
+            },
+            {
+                id: 'beta', name: 'USV BETA', color: '#ff6b35',
+                waypoints: [
+                    { lat: 1.2000, lng: 103.7000, hdg: 90 },
+                    { lat: 1.2200, lng: 103.8500, hdg: 75 },
+                    { lat: 1.2600, lng: 104.0000, hdg: 60 },
+                    { lat: 1.3000, lng: 104.1500, hdg: 50 },
+                    { lat: 1.3400, lng: 104.3000, hdg: 40 },
+                ]
+            },
+            {
+                id: 'gamma', name: 'USV GAMMA', color: '#7fff00',
+                waypoints: [
+                    { lat: 1.4500, lng: 103.6500, hdg: 135 },
+                    { lat: 1.3800, lng: 103.7800, hdg: 120 },
+                    { lat: 1.3000, lng: 103.9000, hdg: 100 },
+                    { lat: 1.2500, lng: 104.0500, hdg: 85 },
+                    { lat: 1.2000, lng: 104.2000, hdg: 70 },
+                ]
+            },
+            {
+                id: 'delta', name: 'USV DELTA', color: '#e040fb',
+                waypoints: [
+                    { lat: 1.5500, lng: 103.9000, hdg: 200 },
+                    { lat: 1.4800, lng: 103.9500, hdg: 220 },
+                    { lat: 1.4000, lng: 104.0200, hdg: 240 },
+                    { lat: 1.3200, lng: 104.1000, hdg: 255 },
+                    { lat: 1.2500, lng: 104.1800, hdg: 270 },
+                ]
+            },
+        ];
+
+        /* ══════════════════════
+           HEADING CONVERSION
+           Input: 0=East, 90=North, 180=West, 270=South
+           SVG boat points UP (north) by default → add 90° offset
+           CSS rotate goes clockwise, heading is counter-clockwise from East
+           → CSS angle = -(heading - 90) = 90 - heading
+        ══════════════════════ */
+        function hdgToCssRotate(hdg) {
+            return (90 - hdg);
+        }
+
+        /* ══════════════════════
+           BUILD BOAT SVG ICON
+           The boat design points NORTH (up) at 0 rotation.
+           We rotate the entire icon by hdgToCssRotate(heading).
+           The glow ring and pulse DON'T rotate (they stay circular).
+        ══════════════════════ */
+        function boatIcon(color, heading) {
+            const rot = hdgToCssRotate(heading);
+            const hexNoHash = color.replace('#', '');
+            const rgb = hexNoHash.match(/.{2}/g).map(h => parseInt(h, 16)).join(',');
+
+            // Two layers: outer (non-rotating: rings, glow) + inner (rotating: hull)
+            const html = `
+                <div style="position:relative;width:44px;height:44px;filter:drop-shadow(0 0 7px ${color})">
+
+                <!-- non-rotating outer ring + pulse -->
+                <svg style="position:absolute;top:0;left:0" width="44" height="44" viewBox="0 0 44 44">
+                    <circle cx="22" cy="22" r="20" fill="rgba(0,0,0,0.5)" stroke="${color}" stroke-width="1.2" opacity="0.45"/>
+                    <circle cx="22" cy="22" r="14" fill="none" stroke="${color}" stroke-width="0.5"
+                            stroke-dasharray="2.5 3.5" opacity="0.3"
+                            style="transform-origin:22px 22px;animation:spin-slow 8s linear infinite"/>
+                    <circle cx="22" cy="22" r="7" fill="none" stroke="${color}" stroke-width="1"
+                            opacity="0"
+                            style="transform-origin:22px 22px;animation:pulse-ring 2.2s ease-out infinite"/>
+                </svg>
+
+                <!-- rotating boat hull -->
+                <svg style="position:absolute;top:0;left:0;transform:rotate(${rot}deg);transform-origin:22px 22px"
+                    width="44" height="44" viewBox="0 0 44 44">
+                    <!-- outrigger booms L -->
+                    <line x1="16" y1="20" x2="8"  y2="18" stroke="${color}" stroke-width="1.4" stroke-linecap="round"/>
+                    <line x1="16" y1="24" x2="8"  y2="26" stroke="${color}" stroke-width="1.4" stroke-linecap="round"/>
+                    <!-- outrigger booms R -->
+                    <line x1="28" y1="20" x2="36" y2="18" stroke="${color}" stroke-width="1.4" stroke-linecap="round"/>
+                    <line x1="28" y1="24" x2="36" y2="26" stroke="${color}" stroke-width="1.4" stroke-linecap="round"/>
+                    <!-- left ama -->
+                    <path d="M6 17 Q5 22 6 27 Q7.5 28 8 27 Q9 22 8 17 Q7.5 16 6 17Z"
+                        fill="rgba(${rgb},0.13)" stroke="${color}" stroke-width="1.1"/>
+                    <!-- right ama -->
+                    <path d="M38 17 Q39 22 38 27 Q36.5 28 36 27 Q35 22 36 17 Q36.5 16 38 17Z"
+                        fill="rgba(${rgb},0.13)" stroke="${color}" stroke-width="1.1"/>
+                    <!-- main hull -->
+                    <path d="M22 12 L28 17.5 L28 27 Q22 31 16 27 L16 17.5Z"
+                        fill="rgba(${rgb},0.11)" stroke="${color}" stroke-width="1.3"/>
+                    <!-- bow -->
+                    <path d="M16 17.5 L22 12 L28 17.5"
+                        fill="rgba(${rgb},0.2)" stroke="${color}" stroke-width="1.3" stroke-linejoin="round"/>
+                    <!-- stern line -->
+                    <line x1="16.5" y1="26.5" x2="27.5" y2="26.5" stroke="${color}" stroke-width="0.8" opacity="0.5"/>
+                    <!-- mid deck -->
+                    <line x1="16.5" y1="22" x2="27.5" y2="22" stroke="${color}" stroke-width="0.6" opacity="0.28"/>
+                    <!-- core ring -->
+                    <circle cx="22" cy="22" r="3.5" fill="rgba(0,0,0,0.6)" stroke="${color}" stroke-width="0.9" opacity="0.7"/>
+                    <circle cx="22" cy="22" r="1.5" fill="${color}"/>
+                    <circle cx="22" cy="22" r="0.65" fill="rgba(0,0,0,0.7)"/>
+                    <!-- sensor mast -->
+                    <line x1="22" y1="12" x2="22" y2="9.5" stroke="${color}" stroke-width="0.9" stroke-linecap="round" opacity="0.75"/>
+                    <circle cx="22" cy="9" r="1" fill="${color}" opacity="0.9"/>
+                    <!-- heading arrow tip (forward triangle) -->
+                    <polygon points="22,8 20.5,11 23.5,11" fill="${color}" opacity="0.6"/>
+                </svg>
+                </div>`;
+
+            return L.divIcon({
+                html,
+                className: '',
+                iconSize: [44, 44],
+                iconAnchor: [22, 22],
+                tooltipAnchor: [0, -24],
+            });
+        }
+
+        /* ══════════════════════
+           MAP INIT
+        ══════════════════════ */
+        const map = L.map('map', { zoomControl: true });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors', maxZoom: 18
+        }).addTo(map);
+
+        const allPts = boats.flatMap(b => b.waypoints.map(w => [w.lat, w.lng]));
+        map.fitBounds(allPts, { padding: [40, 40] });
+
+        /* ══════════════════════
+           BUILD LAYERS
+        ══════════════════════ */
+        const boatState = {};
+
+        boats.forEach(boat => {
+            const latlngs = boat.waypoints.map(w => [w.lat, w.lng]);
+            const poly = L.polyline(latlngs, {
+                color: boat.color, weight: 2.5, opacity: 0.85, dashArray: '8 4'
+            });
+            const last = boat.waypoints[boat.waypoints.length - 1];
+            const marker = L.marker([last.lat, last.lng], { icon: boatIcon(boat.color, last.hdg) })
+                .addTo(map)
+                .bindTooltip(`<b>${boat.name}</b><br>${boat.waypoints.length} waypoints · hdg ${last.hdg}°`, { direction: 'top', permanent: false });
+            marker.on('click', () => toggleBoatPath(boat.id));
+            boatState[boat.id] = { poly, marker, pathVisible: false };
+        });
+
+        /* ══════════════════════
+           BUILD SIDEBAR CARDS
+        ══════════════════════ */
+        function miniBoatSvg(color) {
+            return `<svg width="18" height="18" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+                <line x1="14" y1="18" x2="7"  y2="16" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+                <line x1="14" y1="21" x2="7"  y2="23" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+                <line x1="26" y1="18" x2="33" y2="16" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+                <line x1="26" y1="21" x2="33" y2="23" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+                <path d="M5 15.5 Q4 19.5 5 23.5 Q6.5 24.5 7 23.5 Q8 19.5 7 15.5 Q6.5 14.5 5 15.5Z" fill="none" stroke="${color}" stroke-width="1.5"/>
+                <path d="M35 15.5 Q36 19.5 35 23.5 Q33.5 24.5 33 23.5 Q32 19.5 33 15.5 Q33.5 14.5 35 15.5Z" fill="none" stroke="${color}" stroke-width="1.5"/>
+                <path d="M20 11 L26 16 L26 24 Q20 28 14 24 L14 16Z" fill="none" stroke="${color}" stroke-width="2"/>
+                <path d="M14 16 L20 11 L26 16" fill="${color}" opacity="0.4" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
+                <circle cx="20" cy="20" r="3" fill="${color}"/>
+            </svg>`;
+        }
+
+        const listEl = document.getElementById('boatList');
+        boats.forEach(boat => {
+            const last = boat.waypoints[boat.waypoints.length - 1];
+            const card = document.createElement('div');
+            card.className = 'boat-card';
+            card.id = `card-${boat.id}`;
+            card.style.setProperty('--boat-color', boat.color);
+            card.innerHTML = `
+                <div class="boat-card-inner">
+                <div class="boat-icon-wrap" id="iconwrap-${boat.id}" style="border-color:${boat.color};color:${boat.color}">
+                    ${miniBoatSvg(boat.color)}
+                </div>
+                <div class="boat-info">
+                    <div class="boat-name" id="name-${boat.id}" style="color:${boat.color}">${boat.name}</div>
+                    <div class="boat-meta" id="meta-${boat.id}">${boat.waypoints.length} waypoints · hdg ${last.hdg}° · hidden</div>
+                </div>
+                <div class="boat-actions">
+                    <button class="icon-btn" title="Edit color" onclick="openModal('${boat.id}')">
+                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                        <circle cx="7" cy="7" r="3.5" stroke="currentColor" stroke-width="1.3"/>
+                        <circle cx="7" cy="7" r="1" fill="currentColor"/>
+                        <line x1="7" y1="0" x2="7" y2="3" stroke="currentColor" stroke-width="1.3"/>
+                        <line x1="7" y1="11" x2="7" y2="14" stroke="currentColor" stroke-width="1.3"/>
+                        <line x1="0" y1="7" x2="3" y2="7" stroke="currentColor" stroke-width="1.3"/>
+                        <line x1="11" y1="7" x2="14" y2="7" stroke="currentColor" stroke-width="1.3"/>
+                    </svg>
+                    </button>
+                </div>
+                <div class="swatch-btn" id="swatch-${boat.id}" style="background:${boat.color}" onclick="openModal('${boat.id}')"></div>
+                </div>`;
+            card.addEventListener('click', e => {
+                if (e.target.closest('.icon-btn') || e.target.closest('.swatch-btn')) return;
+                toggleBoatPath(boat.id);
+            });
+            listEl.appendChild(card);
+        });
+
+        /* ══════════════════════
+           PATH TOGGLE
+        ══════════════════════ */
+        function toggleBoatPath(id) {
+            const state = boatState[id];
+            const boat = boats.find(b => b.id === id);
+            if (state.pathVisible) { map.removeLayer(state.poly); state.pathVisible = false; }
+            else { state.poly.addTo(map); state.pathVisible = true; map.flyToBounds(boat.waypoints.map(w => [w.lat, w.lng]), { padding: [60, 60], duration: 1.2 }); }
+            updateCardUI(id);
+            updateStats();
+        }
+        function showAllPaths() {
+            boats.forEach(b => { const s = boatState[b.id]; if (!s.pathVisible) { s.poly.addTo(map); s.pathVisible = true; } updateCardUI(b.id); });
+            map.fitBounds(allPts, { padding: [40, 40], animate: true });
+            updateStats();
+        }
+        function hideAllPaths() {
+            boats.forEach(b => { const s = boatState[b.id]; if (s.pathVisible) { map.removeLayer(s.poly); s.pathVisible = false; } updateCardUI(b.id); });
+            updateStats();
+        }
+        function updateCardUI(id) {
+            const state = boatState[id];
+            const boat = boats.find(b => b.id === id);
+            const last = boat.waypoints[boat.waypoints.length - 1];
+            const card = document.getElementById(`card-${id}`);
+            const meta = document.getElementById(`meta-${id}`);
+            card.classList.toggle('path-visible', state.pathVisible);
+            meta.textContent = `${boat.waypoints.length} waypoints · hdg ${last.hdg}° · ${state.pathVisible ? 'visible' : 'hidden'}`;
+        }
+        function updateStats() {
+            const v = boats.filter(b => boatState[b.id].pathVisible).length;
+            document.getElementById('statVisible').textContent = v;
+        }
+
+        /* ══════════════════════
+           COLOR MODAL
+        ══════════════════════ */
+        const PRESETS = ['#00c8b4', '#ff6b35', '#7fff00', '#e040fb', '#ffdd00', '#ff1744', '#00e5ff', '#64ffda', '#ff80ab', '#ffffff', '#ff9800', '#76ff03'];
+        let activeModalId = null, pendingColor = null;
+
+        const presetContainer = document.getElementById('presets');
+        PRESETS.forEach(c => {
+            const chip = document.createElement('div');
+            chip.className = 'preset-chip';
+            chip.style.background = c;
+            chip.dataset.color = c;
+            chip.title = c;
+            chip.addEventListener('click', () => {
+                document.querySelectorAll('.preset-chip').forEach(x => x.classList.remove('selected'));
+                chip.classList.add('selected');
+                setModalColor(c);
+            });
+            presetContainer.appendChild(chip);
+        });
+
+        function openModal(id) {
+            activeModalId = id;
+            const boat = boats.find(b => b.id === id);
+            pendingColor = boat.color;
+            document.getElementById('modalBoatName').textContent = boat.name;
+            setModalColor(boat.color);
+            document.getElementById('modalOverlay').classList.add('open');
+        }
+        function closeModal() {
+            document.getElementById('modalOverlay').classList.remove('open');
+            activeModalId = null;
+        }
+        function setModalColor(hex) {
+            pendingColor = hex;
+            document.getElementById('colorPreview').style.background = hex;
+            document.getElementById('colorPicker').value = hex;
+            document.getElementById('colorHex').value = hex;
+            document.querySelectorAll('.preset-chip').forEach(c => c.classList.toggle('selected', c.dataset.color === hex));
+        }
+        function onColorInput(v) { setModalColor(v); }
+        function onHexInput(v) { if (/^#[0-9a-fA-F]{6}$/.test(v)) setModalColor(v); }
+
+        function applyColor() {
+            if (!activeModalId || !pendingColor) return;
+            const boat = boats.find(b => b.id === activeModalId);
+            boat.color = pendingColor;
+            const state = boatState[activeModalId];
+            const last = boat.waypoints[boat.waypoints.length - 1];
+            state.poly.setStyle({ color: pendingColor });
+            state.marker.setIcon(boatIcon(pendingColor, last.hdg));
+            const card = document.getElementById(`card-${activeModalId}`);
+            card.style.setProperty('--boat-color', pendingColor);
+            document.getElementById(`name-${activeModalId}`).style.color = pendingColor;
+            document.getElementById(`swatch-${activeModalId}`).style.background = pendingColor;
+            const wrap = document.getElementById(`iconwrap-${activeModalId}`);
+            wrap.style.borderColor = pendingColor;
+            wrap.style.color = pendingColor;
+            wrap.innerHTML = miniBoatSvg(pendingColor);
+            closeModal();
+        }
+
+        document.getElementById('modalOverlay').addEventListener('click', function (e) { if (e.target === this) closeModal(); });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+        document.getElementById('boatCount').textContent = boats.length;
+        document.getElementById('statCount').textContent = boats.length;
+    </script>
+
+    <script>
+        /* ══════════════════════════════════════════════
+           HUMAN TARGETS + COMMAND CENTER OVERLAY
+           Drop this block anywhere after the main script.
+           Requires: `map` (Leaflet instance) to be in scope.
+        ══════════════════════════════════════════════ */
+
+        /* ── Keyframe injection (safe to run multiple times) ── */
+        (function injectStyles() {
+            if (document.getElementById('overlay-styles')) return;
+            const s = document.createElement('style');
+            s.id = 'overlay-styles';
+            s.textContent = `
+                @keyframes human-pulse {
+                0%   { transform: scale(0.55); opacity: 1; }
+                100% { transform: scale(2.6);  opacity: 0; }
+                }
+                @keyframes human-pulse2 {
+                0%   { transform: scale(0.55); opacity: 0.6; }
+                100% { transform: scale(2.0);  opacity: 0; }
+                }
+                @keyframes cc-spin {
+                from { transform: rotate(0deg); }
+                to   { transform: rotate(360deg); }
+                }
+                @keyframes cc-ping {
+                0%   { transform: scale(0.6); opacity: 0.9; }
+                100% { transform: scale(2.8); opacity: 0; }
+                }
+            `;
+            document.head.appendChild(s);
+        })();
+
+
+        /* ════════════════════════════════
+           1. HUMAN TARGET DATA
+           pos  : [lat, lng]
+           label: short id shown in tooltip
+           radius: buffer radius in metres
+        ════════════════════════════════ */
+        const humanTargets = [
+            { id: 'H-01', label: 'Target Alpha', pos: [1.3200, 103.8600], radius: 120 },
+            { id: 'H-02', label: 'Target Bravo', pos: [1.4000, 104.1000], radius: 200 },
+            { id: 'H-03', label: 'Target Charlie', pos: [1.2700, 104.2400], radius: 80 },
+        ];
+
+        /* ════════════════════════════════
+           2. COMMAND CENTER DATA
+        ════════════════════════════════ */
+        const commandCenter = {
+            label: 'Command Center',
+            pos: [1.3521, 103.7500],
+        };
+
+
+        /* ════════════════════════════════
+           HUMAN ICON BUILDER
+           Full male silhouette inside a
+           glowing red circular frame.
+           Two staggered pulse rings.
+        ════════════════════════════════ */
+        function humanIcon() {
+            const c = '#ff2244'; // red
+            const html = `
+                <div style="position:relative; width:42px; height:42px; filter:drop-shadow(0 0 6px ${c}) drop-shadow(0 0 12px rgba(255,34,68,0.5))">
+
+                    <!-- pulse ring 1 -->
+                    <div style="
+                        position:absolute;inset:0;border-radius:50%;
+                        border:1.5px solid ${c};
+                        animation:human-pulse 2s ease-out infinite;
+                        transform-origin:50% 50%;
+                    "></div>
+
+                    <!-- pulse ring 2 (staggered) -->
+                    <div style="
+                        position:absolute;inset:0;border-radius:50%;
+                        border:1px solid rgba(255,34,68,0.5);
+                        animation:human-pulse2 2s ease-out infinite 0.7s;
+                        transform-origin:50% 50%;
+                    "></div>
+
+                    <!-- icon circle -->
+                    <div style="width:42px; height:42px; position:relative; display:flex; align-items:center; justify-content:center">
+                        <svg width="42" height="42" style="position:absolute" viewBox="0 0 42 42" xmlns="http://www.w3.org/2000/svg">
+
+                            <!-- outer ring -->
+                            <circle cx="21" cy="21" r="19"
+                            fill="rgba(10,5,8,0.75)"
+                            stroke="${c}" stroke-width="1.6"/>
+
+                            <!-- dashed inner ring -->
+                            <circle cx="21" cy="21" r="13.5"
+                            fill="none"
+                            stroke="${c}" stroke-width="0.6"
+                            stroke-dasharray="2 3" opacity="0.45"/>
+                        </svg>
+                        <img src="human_icon.png" height="70%" opacity="0.95" style="position:absolute; z-index:201;"/>
+                    </div>
+                </div>`;
+
+            return L.divIcon({
+                html,
+                className: '',
+                iconSize: [42, 42],
+                iconAnchor: [21, 21],
+                tooltipAnchor: [0, -24],
+            });
+        }
+
+
+        /* ════════════════════════════════
+           COMMAND CENTER ICON BUILDER
+           Octagonal radar / comms tower
+           with spinning orbit ring and
+           amber/gold accent color.
+        ════════════════════════════════ */
+        function commandCenterIcon() {
+            const c = '#ffc400'; // amber gold
+            const c2 = 'rgba(255,196,0,0.35)';
+            const html = `
+                <div style="position:relative;width:52px;height:52px;filter:drop-shadow(0 0 8px ${c}) drop-shadow(0 0 18px rgba(255,196,0,0.4))">
+
+                <!-- ping ring -->
+                <div style="
+                    position:absolute;inset:0;border-radius:50%;
+                    border:1.5px solid ${c};
+                    animation:cc-ping 3s ease-out infinite;
+                    transform-origin:50% 50%;
+                "></div>
+
+                <!-- spinning orbit ring -->
+                <svg style="position:absolute;top:0;left:0;animation:cc-spin 6s linear infinite;transform-origin:26px 26px"
+                    width="52" height="52" viewBox="0 0 52 52">
+                    <circle cx="26" cy="26" r="23"
+                    fill="none" stroke="${c}"
+                    stroke-width="0.8" stroke-dasharray="3 5" opacity="0.5"/>
+                    <!-- orbit dot -->
+                    <circle cx="26" cy="3" r="2" fill="${c}" opacity="0.8"/>
+                </svg>
+
+                <!-- static body -->
+                <svg style="position:absolute;top:0;left:0"
+                    width="52" height="52" viewBox="0 0 52 52">
+
+                    <!-- outer octagon -->
+                    <polygon
+                    points="18,5 34,5 47,18 47,34 34,47 18,47 5,34 5,18"
+                    fill="rgba(10,8,4,0.82)"
+                    stroke="${c}" stroke-width="1.8"/>
+
+                    <!-- inner octagon (smaller) -->
+                    <polygon
+                    points="21,12 31,12 40,21 40,31 31,40 21,40 12,31 12,21"
+                    fill="none"
+                    stroke="${c}" stroke-width="0.7" opacity="0.4"/>
+
+                    <!-- radar cross-hairs -->
+                    <line x1="26" y1="13" x2="26" y2="39" stroke="${c}" stroke-width="0.6" opacity="0.3"/>
+                    <line x1="13" y1="26" x2="39" y2="26" stroke="${c}" stroke-width="0.6" opacity="0.3"/>
+                    <line x1="17" y1="17" x2="35" y2="35" stroke="${c}" stroke-width="0.4" opacity="0.2"/>
+                    <line x1="35" y1="17" x2="17" y2="35" stroke="${c}" stroke-width="0.4" opacity="0.2"/>
+
+                    <!-- radar sweep arc (static suggestion) -->
+                    <path d="M26 26 L26 14 A12 12 0 0 1 36.4 19.6 Z"
+                    fill="${c2}"/>
+
+                    <!-- radar rings -->
+                    <circle cx="26" cy="26" r="12" fill="none" stroke="${c}" stroke-width="0.6" opacity="0.35"/>
+                    <circle cx="26" cy="26" r="7"  fill="none" stroke="${c}" stroke-width="0.5" opacity="0.4"/>
+
+                    <!-- antenna mast -->
+                    <line x1="26" y1="5"  x2="26" y2="1"  stroke="${c}" stroke-width="1.2" stroke-linecap="round"/>
+                    <line x1="22" y1="3"  x2="30" y2="3"  stroke="${c}" stroke-width="1.0" stroke-linecap="round" opacity="0.7"/>
+                    <circle cx="26" cy="1" r="1.2" fill="${c}"/>
+
+                    <!-- center core -->
+                    <circle cx="26" cy="26" r="3.5"
+                    fill="rgba(0,0,0,0.7)" stroke="${c}" stroke-width="1"/>
+                    <circle cx="26" cy="26" r="1.6" fill="${c}"/>
+                    <circle cx="26" cy="26" r="0.7" fill="rgba(0,0,0,0.7)"/>
+
+                </svg>
+                </div>`;
+
+            return L.divIcon({
+                html,
+                className: '',
+                iconSize: [52, 52],
+                iconAnchor: [26, 26],
+                tooltipAnchor: [0, -28],
+            });
+        }
+
+
+        /* ════════════════════════════════
+           PLACE HUMAN TARGETS ON MAP
+        ════════════════════════════════ */
+        humanTargets.forEach(t => {
+
+            /* buffer circle */
+            L.circle(t.pos, {
+                radius: t.radius,
+                color: '#ff2244',
+                weight: 1.2,
+                opacity: 0.7,
+                fillColor: '#ff2244',
+                fillOpacity: 0.07,
+                dashArray: '5 4',
+            }).addTo(map)
+                .bindTooltip(
+                    `<b style="color:#ff6680">${t.label}</b><br>Buffer: ${t.radius} m`,
+                    { direction: 'top', permanent: false }
+                );
+
+            /* icon marker */
+            L.marker(t.pos, { icon: humanIcon() })
+                .addTo(map)
+                .bindTooltip(
+                    `<b style="color:#ff6680">${t.id} — ${t.label}</b><br>
+                    <span style="font-size:11px;opacity:0.7">${t.pos[0].toFixed(4)}, ${t.pos[1].toFixed(4)}</span><br>
+                    <span style="font-size:11px;color:#ff4466">⚠ Buffer radius: ${t.radius} m</span>`,
+                    { direction: 'top', permanent: false }
+                );
+        });
+
+
+        /* ════════════════════════════════
+           PLACE COMMAND CENTER ON MAP
+        ════════════════════════════════ */
+        L.marker(commandCenter.pos, { icon: commandCenterIcon() })
+            .addTo(map)
+            .bindTooltip(
+                `<b style="color:#ffd740">⬡ ${commandCenter.label}</b><br>
+                <span style="font-size:11px;opacity:0.7">${commandCenter.pos[0].toFixed(4)}, ${commandCenter.pos[1].toFixed(4)}</span><br>
+                <span style="font-size:11px;color:#ffc400">All USVs monitored from here</span>`,
+                { direction: 'top', permanent: false }
+            );
+
+        /* ════════════════════════════════
+           END OF OVERLAY SCRIPT
+        ════════════════════════════════ */
+    </script>
+</body>
+
+</html>
