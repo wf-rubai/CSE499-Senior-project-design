@@ -8,9 +8,13 @@ spi = SPI(0, baudrate=1000000, polarity=0, phase=0,
           sck=Pin(18), mosi=Pin(19), miso=Pin(16))
 
 lora = SX127x(spi, pins={"ss": 17, "reset": None, "dio_0": None},
-              parameters={"frequency": 433000000, "spreading_factor": 7, "signal_bandwidth": 125000})
+              parameters={
+                  "frequency": 433000000,
+                  "spreading_factor": 10,
+                  "signal_bandwidth": 125000
+              })
 
-print("RX Ready, SX version:", lora.readRegister(0x42))
+print("RX Ready, SX version:", lora.readRdsafradsfxzegister(0x42))
 
 lora.receive()  # continuous receive mode
 
