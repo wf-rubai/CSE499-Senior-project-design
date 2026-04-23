@@ -5,9 +5,7 @@ import time
 uart = UART(1, baudrate=9600, tx=Pin(4), rx=Pin(5))  # GP4 (TX) and GP5 (RX)
 
 def nmea_to_decimal(raw_value, direction):
-    """
-    Converts NMEA coordinate format (ddmm.mmmm) to decimal degrees.
-    """
+    # Converts NMEA coordinate format (ddmm.mmmm) to decimal degrees.
     if not raw_value:
         return None
     try:
@@ -25,9 +23,7 @@ def nmea_to_decimal(raw_value, direction):
     return decimal
 
 def parse_gga(sentence):
-    """
-    Parses the GGA sentence to extract latitude, longitude, and fix status.
-    """
+    # Parses the GGA sentence to extract latitude, longitude, and fix status.
     parts = sentence.split(",")
     if len(parts) < 7:
         return None
@@ -43,9 +39,7 @@ def parse_gga(sentence):
     return lat, lon, satellites_in_view
 
 def parse_rmc(sentence):
-    """
-    Parses the RMC sentence to extract latitude and longitude.
-    """
+    # Parses the RMC sentence to extract latitude and longitude.
     parts = sentence.split(",")
     if len(parts) < 7:
         return None

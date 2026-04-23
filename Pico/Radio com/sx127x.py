@@ -9,6 +9,7 @@ PA_OUTPUT_PA_BOOST_PIN = const(1)
 
 # registers
 REG_FIFO = const(0x00)
+REG_PA_DAC = const(0x4D)
 REG_OP_MODE = const(0x01)
 REG_FRF_MSB = const(0x06)
 REG_FRF_MID = const(0x07)
@@ -94,6 +95,16 @@ class SX127x:
     }
 
     def __init__(self, spi, pins, parameters={}):
+        # setup reset pin if provided
+        self.pin_reset = None                                               ### NEW CODE START
+        if "reset" in self.pins and self.pins["reset"] is not None:
+            self.pin_reset = Pin(self.pins["reset"], Pin.OUT)
+
+            # proper reset pulse
+            self.pin_reset.value(0)
+            sleep(0.01)
+            self.pin_reset.value(1)
+            sleep(0.01)                                                     ### NEW CODE END
         self.spi = spi
         self.pins = pins
         self.parameters = parameters
@@ -159,14 +170,45 @@ class SX127x:
         self.writeRegister(REG_FIFO_ADDR_PTR, FifoTxBaseAddr)
         self.writeRegister(REG_PAYLOAD_LENGTH, 0)
 
-    def endPacket(self):
-        # put in TX mode
+    # def endPacket(self):
+    #     # put in TX mode
+    #     self.writeRegister(REG_OP_MODE, MODE_LONG_RANGE_MODE | MODE_TX)
+    #     # wait for TX done, standby automatically on TX_DONE
+    #     while (self.readRegister(REG_IRQ_FLAGS) & IRQ_TX_DONE_MASK) == 0:
+    #         pass
+    #     # clear IRQ's
+    #     self.writeRegister(REG_IRQ_FLAGS, IRQ_TX_DONE_MASK)
+    
+    def endPacket(self, timeout=2000):                                              ### NEW CODE
+        # enter TX mode
         self.writeRegister(REG_OP_MODE, MODE_LONG_RANGE_MODE | MODE_TX)
-        # wait for TX done, standby automatically on TX_DONE
+
+        start = ticks_ms()
+
+        # wait for TX done with timeout
         while (self.readRegister(REG_IRQ_FLAGS) & IRQ_TX_DONE_MASK) == 0:
-            pass
-        # clear IRQ's
+            if ticks_ms() - start > timeout:
+                print("TX TIMEOUT → resetting radio")
+                self.resetRadio()
+                return False
+
+        # clear IRQ
         self.writeRegister(REG_IRQ_FLAGS, IRQ_TX_DONE_MASK)
+
+        # IMPORTANT: go back to standby
+        self.standby()
+
+        return True                                       
+    
+    def resetRadio(self):
+        if self.pin_reset:
+            self.pin_reset.value(0)
+            sleep(0.01)
+            self.pin_reset.value(1)
+            sleep(0.01)
+
+        self.sleep()
+        self.standby()                                                              ### NEW CODE END
 
     def write(self, buffer):
         currentLength = self.readRegister(REG_PAYLOAD_LENGTH)
@@ -184,7 +226,7 @@ class SX127x:
         return size
 
     def aquirelock(self, lock=False):
-        self.lock = False
+        self.lock = lock
 
     def println(self, message, implicitHeader=False, repeat=1):
         # wait until RX_Done, lock and begin writing
@@ -196,8 +238,12 @@ class SX127x:
         self.beginPacket(implicitHeader)
         self.write(message)
 
-        for i in range(repeat):
-            self.endPacket()
+        # for i in range(repeat):
+        #     self.endPacket()
+        
+        for i in range(repeat):                                             ### NEW CODE START
+            if not self.endPacket():
+                break                                                       ### NEW CODE END
 
         # unlock when done writing
         self.aquirelock(False)
@@ -221,16 +267,31 @@ class SX127x:
     def sleep(self):
         self.writeRegister(REG_OP_MODE, MODE_LONG_RANGE_MODE | MODE_SLEEP)
 
+    # def setTxPower(self, level, outputPin=PA_OUTPUT_PA_BOOST_PIN):
+    #     self.parameters["tx_power_level"] = level
+    #     if outputPin == PA_OUTPUT_RFO_PIN:
+    #         # RFO
+    #         level = min(max(level, 0), 14)
+    #         self.writeRegister(REG_PA_CONFIG, 0x70 | level)
+    #     else:
+    #         # PA BOOST
+    #         level = min(max(level, 2), 17)
+    #         self.writeRegister(REG_PA_CONFIG, PA_BOOST | (level - 2))
+    
     def setTxPower(self, level, outputPin=PA_OUTPUT_PA_BOOST_PIN):
         self.parameters["tx_power_level"] = level
         if outputPin == PA_OUTPUT_RFO_PIN:
-            # RFO
             level = min(max(level, 0), 14)
             self.writeRegister(REG_PA_CONFIG, 0x70 | level)
         else:
-            # PA BOOST
-            level = min(max(level, 2), 17)
-            self.writeRegister(REG_PA_CONFIG, PA_BOOST | (level - 2))
+            if level == 20:
+                # enable +20 dBm PA_DAC mode
+                self.writeRegister(REG_PA_CONFIG, PA_BOOST | (15))
+                self.writeRegister(REG_PA_DAC, 0x87)  # ✅ unlock 20 dBm
+            else:
+                level = min(max(level, 2), 17)
+                self.writeRegister(REG_PA_CONFIG, PA_BOOST | (level - 2))
+                self.writeRegister(REG_PA_DAC, 0x84)  # default
 
     def setFrequency(self, frequency):
         # TODO min max limit
