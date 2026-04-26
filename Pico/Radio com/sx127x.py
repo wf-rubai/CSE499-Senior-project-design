@@ -95,6 +95,12 @@ class SX127x:
     }
 
     def __init__(self, spi, pins, parameters={}):
+                                                ### NEW CODE END
+        self.spi = spi
+        self.pins = pins
+        self.parameters = parameters
+
+        self.pin_ss = Pin(self.pins["ss"], Pin.OUT)
         # setup reset pin if provided
         self.pin_reset = None                                               ### NEW CODE START
         if "reset" in self.pins and self.pins["reset"] is not None:
@@ -104,12 +110,7 @@ class SX127x:
             self.pin_reset.value(0)
             sleep(0.01)
             self.pin_reset.value(1)
-            sleep(0.01)                                                     ### NEW CODE END
-        self.spi = spi
-        self.pins = pins
-        self.parameters = parameters
-
-        self.pin_ss = Pin(self.pins["ss"], Pin.OUT)
+            sleep(0.01)     
 
         self.lock = False
         self.implicit_header_mode = None

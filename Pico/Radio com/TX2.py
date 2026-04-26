@@ -39,6 +39,6 @@ time.sleep(2)
 
 while True:
     print("Sending...")
-    lora.println("Hello")
+    lora.println("Hello workd")
     print("Done")
     time.sleep(2)
