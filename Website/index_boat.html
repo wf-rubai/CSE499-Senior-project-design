@@ -685,53 +685,11 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script>
-        /* ══════════════════════
-           DATA
-           heading: 0=East, 90=North, 180=West, 270=South
-           (standard math convention, converted to CSS rotate below)
-        ══════════════════════ */
-        const boats = [
-            {
-                id: 'alpha', name: 'USV ALPHA', color: '#00d4ff',
-                waypoints: [
-                    { lat: 1.3521, lng: 103.8198, hdg: 45 },
-                    { lat: 1.4200, lng: 104.0000, hdg: 30 },
-                    { lat: 1.5000, lng: 104.2000, hdg: 10 },
-                    { lat: 1.6100, lng: 104.3500, hdg: 355 },
-                    { lat: 1.7000, lng: 104.5000, hdg: 340 },
-                ]
-            },
-            {
-                id: 'beta', name: 'USV BETA', color: '#ff6b35',
-                waypoints: [
-                    { lat: 1.2000, lng: 103.7000, hdg: 90 },
-                    { lat: 1.2200, lng: 103.8500, hdg: 75 },
-                    { lat: 1.2600, lng: 104.0000, hdg: 60 },
-                    { lat: 1.3000, lng: 104.1500, hdg: 50 },
-                    { lat: 1.3400, lng: 104.3000, hdg: 40 },
-                ]
-            },
-            {
-                id: 'gamma', name: 'USV GAMMA', color: '#7fff00',
-                waypoints: [
-                    { lat: 1.4500, lng: 103.6500, hdg: 135 },
-                    { lat: 1.3800, lng: 103.7800, hdg: 120 },
-                    { lat: 1.3000, lng: 103.9000, hdg: 100 },
-                    { lat: 1.2500, lng: 104.0500, hdg: 85 },
-                    { lat: 1.2000, lng: 104.2000, hdg: 70 },
-                ]
-            },
-            {
-                id: 'delta', name: 'USV DELTA', color: '#e040fb',
-                waypoints: [
-                    { lat: 1.5500, lng: 103.9000, hdg: 200 },
-                    { lat: 1.4800, lng: 103.9500, hdg: 220 },
-                    { lat: 1.4000, lng: 104.0200, hdg: 240 },
-                    { lat: 1.3200, lng: 104.1000, hdg: 255 },
-                    { lat: 1.2500, lng: 104.1800, hdg: 270 },
-                ]
-            },
-        ];
+
+        const boats = [];
+        const humanTargets = [];
+        const boatStatus = {};
+        const humanState = {};
 
         /* ══════════════════════
            HEADING CONVERSION
@@ -825,7 +783,11 @@
         }).addTo(map);
 
         const allPts = boats.flatMap(b => b.waypoints.map(w => [w.lat, w.lng]));
-        map.fitBounds(allPts, { padding: [40, 40] });
+        if (allPts.length > 0) {
+            map.fitBounds(allPts, { padding: [40, 40] });
+        } else {
+            map.setView([23.8103, 90.4125], 20); // fallback (Bangladesh)
+        }
 
         /* ══════════════════════
            BUILD LAYERS
@@ -1035,19 +997,6 @@
             document.head.appendChild(s);
         })();
 
-
-        /* ════════════════════════════════
-           1. HUMAN TARGET DATA
-           pos  : [lat, lng]
-           label: short id shown in tooltip
-           radius: buffer radius in metres
-        ════════════════════════════════ */
-        const humanTargets = [
-            { id: 'H-01', label: 'Target Alpha', pos: [1.3200, 103.8600], radius: 120 },
-            { id: 'H-02', label: 'Target Bravo', pos: [1.4000, 104.1000], radius: 200 },
-            { id: 'H-03', label: 'Target Charlie', pos: [1.2700, 104.2400], radius: 80 },
-        ];
-
         /* ════════════════════════════════
            2. COMMAND CENTER DATA
         ════════════════════════════════ */
@@ -1244,6 +1193,136 @@
         /* ════════════════════════════════
            END OF OVERLAY SCRIPT
         ════════════════════════════════ */
+    </script>
+
+    <script>
+        // helper: generate random heading
+        function randomHeading() {
+            return Math.floor(Math.random() * 360);
+        }
+
+        // helper: generate unique human ID
+        let humanCount = 1;
+        function generateHumanId() {
+            return "H-" + String(humanCount++).padStart(4, '0');
+        }
+
+        // main function (call this with JSON from Flask)
+        function processPicoData(data) {
+            let { name, lat, lon, human } = data;
+
+            if (!name || lat === undefined || lon === undefined) return;
+
+            let boat = boats.find(b => b.id === name);
+
+            // 🟢 NEW BOAT
+            if (!boat) {
+                boat = {
+                    id: name,
+                    name: name.toUpperCase(),
+                    color: getRandomColor(),
+                    waypoints: []
+                };
+                boats.push(boat);
+
+                // create map objects
+                const marker = L.marker([lat, lon], {
+                    icon: boatIcon(boat.color, 0)
+                }).addTo(map);
+
+                const poly = L.polyline([], {
+                    color: boat.color,
+                    weight: 2.5,
+                    opacity: 0.85,
+                    dashArray: '8 4'
+                }).addTo(map);
+
+                boatStatus[name] = {
+                    marker,
+                    poly
+                };
+            }
+
+            // 🟢 ADD WAYPOINT
+            const hdg = randomHeading();
+
+            boat.waypoints.push({
+                lat,
+                lng: lon,
+                hdg
+            });
+
+            if (boat.waypoints.length > 50) {
+                boat.waypoints.shift();
+            }
+
+            // 🟢 UPDATE MAP
+            const state = boatStatus[name];
+
+            state.marker.setLatLng([lat, lon]);
+            state.marker.setIcon(boatIcon(boat.color, hdg));
+
+            state.poly.setLatLngs(
+                boat.waypoints.map(w => [w.lat, w.lng])
+            );
+
+            state.marker.bindTooltip(
+                `<b>${boat.name}</b><br>${boat.waypoints.length} pts · hdg ${hdg}°`
+            );
+
+            // 🔴 HUMAN DETECTION (no duplicates spam)
+            if (human === 1) {
+                const key = `${lat.toFixed(5)}_${lon.toFixed(5)}`;
+
+                if (!humanState[key]) {
+                    const id = generateHumanId();
+
+                    const circle = L.circle([lat, lon], {
+                        radius: 150,
+                        color: '#ff2244',
+                        weight: 1.2,
+                        fillOpacity: 0.07
+                    }).addTo(map);
+
+                    const marker = L.marker([lat, lon], {
+                        icon: humanIcon()
+                    }).addTo(map);
+
+                    marker.bindTooltip(`<b>${id}</b><br>Human detected`);
+
+                    humanState[key] = true;
+
+                    humanTargets.push({
+                        id,
+                        pos: [lat, lon],
+                        radius: 150
+                    });
+                }
+            }
+        }
+        // random color for new boats
+        function getRandomColor() {
+            return "#" + Math.floor(Math.random() * 16777215).toString(16);
+        }
+
+        /* =═════════════════════════════
+           POLLING LOOP
+           Adjust the URL and polling interval as needed.
+        ══════════════════════════════ */
+        setInterval(async () => {
+            try {
+                let res = await fetch("http://localhost:5001/data");
+                let data = await res.json();
+
+                processPicoData(data);
+
+                console.log("Boats:", boats);
+                console.log("Humans:", humanTargets);
+
+            } catch (e) {
+                console.log("Error:", e);
+            }
+        }, 1000);
     </script>
 </body>
 
