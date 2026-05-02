@@ -26,7 +26,6 @@
 /* Includes ---------------------------------------------------------------- */
 #include <Person_Detection_inferencing.h>
 #include "edge-impulse-sdk/dsp/image/image.hpp"
-
 #include "esp_camera.h"
 
 // Select camera model - find more camera models in camera_pins.h file here
@@ -73,6 +72,9 @@
 #define HREF_GPIO_NUM     23
 #define PCLK_GPIO_NUM     22
 
+#define PIN_HUMAN_DETECTED   12   // GP0 on Pico — HIGH when human present
+#define PIN_SAMPLE_PULSE     13   // GP16 on Pico — toggles every sample
+
 #else
 #error "Camera model not selected"
 #endif
@@ -82,10 +84,39 @@
 #define EI_CAMERA_RAW_FRAME_BUFFER_ROWS           240
 #define EI_CAMERA_FRAME_BYTE_SIZE                 3
 
+// ============================================================
+// SLIDING WINDOW & THRESHOLD CONFIGURATION
+// ============================================================
+#define NUM_SAMPLES          5       // Window size: average over last 5 readings
+#define HUMAN_THRESHOLD      0.3f    // If sliding avg human confidence >= 0.3 → YES, else NO
+#define SAMPLE_INTERVAL_MS   350     // 350ms between each sample → decision every 1750ms (5 x 350ms)
+
 /* Private variables ------------------------------------------------------- */
 static bool debug_nn = false; // Set this to true to see e.g. features generated from the raw signal
 static bool is_initialised = false;
-uint8_t *snapshot_buf; //points to the output of the capture
+uint8_t *snapshot_buf; // Points to the output of the capture
+
+// ============================================================
+// SLIDING WINDOW BUFFERS
+// Instead of a simple sum that resets every 5 samples,
+// we store the last NUM_SAMPLES values in circular arrays.
+// Each new reading overwrites the oldest one (FIFO behaviour).
+// A decision is produced after EVERY new sample once the
+// window is full — not just every 5th sample.
+//
+// Example timeline:
+//   Sample 1 → buffer: [1, -, -, -, -]  window not full yet, no decision
+//   Sample 2 → buffer: [1, 2, -, -, -]  window not full yet, no decision
+//   Sample 3 → buffer: [1, 2, 3, -, -]  window not full yet, no decision
+//   Sample 4 → buffer: [1, 2, 3, 4, -]  window not full yet, no decision
+//   Sample 5 → buffer: [1, 2, 3, 4, 5]  window full → decision from avg(1,2,3,4,5)
+//   Sample 6 → buffer: [6, 2, 3, 4, 5]  window full → decision from avg(2,3,4,5,6)
+//   Sample 7 → buffer: [6, 7, 3, 4, 5]  window full → decision from avg(3,4,5,6,7)
+// ============================================================
+static float   human_window[NUM_SAMPLES]    = {0}; // Circular buffer for human confidence values
+static float   nonhuman_window[NUM_SAMPLES] = {0}; // Circular buffer for non-human confidence values
+static uint8_t window_index                 = 0;   // Current write position in the circular buffer
+static uint8_t samples_collected            = 0;   // Total samples seen; caps at NUM_SAMPLES once full
 
 static camera_config_t camera_config = {
     .pin_pwdn = PWDN_GPIO_NUM,
@@ -127,27 +158,68 @@ static camera_config_t camera_config = {
 /* Function definitions ------------------------------------------------------- */
 bool ei_camera_init(void);
 void ei_camera_deinit(void);
-bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf) ;
+bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf);
+
+// ============================================================
+// HELPER: Print the final averaged YES/NO decision to Serial
+// Called after every sample once the window is full
+// ============================================================
+void print_decision(float avg_human, float avg_nonhuman) {
+    ei_printf("\n========================================\n");
+    ei_printf("  SLIDING WINDOW RESULT (last %d samples)\n", NUM_SAMPLES);
+    ei_printf("========================================\n");
+
+    // Show both averaged confidence values as percentages
+    ei_printf("  Avg Human Confidence    : %.2f%%\n", avg_human * 100.0f);
+    ei_printf("  Avg Non-Human Confidence: %.2f%%\n", avg_nonhuman * 100.0f);
+    ei_printf("----------------------------------------\n");
+
+    // Threshold check:
+    // avg_human >= HUMAN_THRESHOLD (0.3) → YES, human present
+    // avg_human <  HUMAN_THRESHOLD (0.3) → NO, no human detected
+    if (avg_human >= HUMAN_THRESHOLD) {
+        ei_printf("  DECISION  :  >>> YES - HUMAN DETECTED <<<\n");
+        ei_printf("  CONFIDENCE:  %.1f%%\n", avg_human * 100.0f);
+        digitalWrite(PIN_HUMAN_DETECTED, HIGH);   // ← GP0 HIGH
+    } else {
+        ei_printf("  DECISION  :  >>> NO - NO HUMAN DETECTED <<<\n");
+        ei_printf("  CONFIDENCE:  %.1f%% (below %.0f%% threshold)\n",
+                avg_human * 100.0f, HUMAN_THRESHOLD * 100.0f);
+        digitalWrite(PIN_HUMAN_DETECTED, LOW);    // ← GP0 LOW
+    }
+
+    ei_printf("========================================\n\n");
+}
 
 /**
 * @brief      Arduino setup function
 */
 void setup()
 {
-    // put your setup code here, to run once:
     Serial.begin(115200);
-    //comment out the below line to start inference immediately after upload
+    // Comment out the below line to start inference immediately after upload
     while (!Serial);
     Serial.println("Edge Impulse Inferencing Demo");
+
+    // Print configuration so user can confirm settings in Serial Monitor
+    ei_printf("Config: sliding window=%d | %.0fms interval | decision every ~%.0fms | %.0f%% threshold\n",
+              NUM_SAMPLES,
+              (float)SAMPLE_INTERVAL_MS,
+              (float)(NUM_SAMPLES * SAMPLE_INTERVAL_MS), // 5 x 350 = 1750ms for first decision
+              HUMAN_THRESHOLD * 100.0f);
+
     if (ei_camera_init() == false) {
         ei_printf("Failed to initialize Camera!\r\n");
-    }
-    else {
+    } else {
         ei_printf("Camera initialized\r\n");
     }
 
-    ei_printf("\nStarting continious inference in 2 seconds...\n");
+    ei_printf("\nStarting continuous inference in 2 seconds...\n");
     ei_sleep(2000);
+    pinMode(PIN_HUMAN_DETECTED, OUTPUT);
+    pinMode(PIN_SAMPLE_PULSE,   OUTPUT);
+    digitalWrite(PIN_HUMAN_DETECTED, LOW);
+    digitalWrite(PIN_SAMPLE_PULSE,   LOW);
 }
 
 /**
@@ -157,16 +229,23 @@ void setup()
 */
 void loop()
 {
-
-    // instead of wait_ms, we'll wait on the signal, this allows threads to cancel us...
-    if (ei_sleep(5) != EI_IMPULSE_OK) {
+    // --------------------------------------------------------
+    // UNIFORM 350ms INTERVAL
+    // Sits at the top of loop() so every single sample is
+    // spaced exactly 350ms apart. With a window of 5 samples,
+    // the first decision arrives after 5 x 350ms = 1750ms,
+    // then a new decision is produced every 350ms after that.
+    // --------------------------------------------------------
+    if (ei_sleep(SAMPLE_INTERVAL_MS) != EI_IMPULSE_OK) {
         return;
     }
 
+    // Allocate frame buffer for raw RGB888 image
+    // Size = width * height * 3 bytes (R, G, B one byte each)
     snapshot_buf = (uint8_t*)malloc(EI_CAMERA_RAW_FRAME_BUFFER_COLS * EI_CAMERA_RAW_FRAME_BUFFER_ROWS * EI_CAMERA_FRAME_BYTE_SIZE);
 
-    // check if allocation was successful
-    if(snapshot_buf == nullptr) {
+    // Check if allocation was successful
+    if (snapshot_buf == nullptr) {
         ei_printf("ERR: Failed to allocate snapshot buffer!\n");
         return;
     }
@@ -175,22 +254,24 @@ void loop()
     signal.total_length = EI_CLASSIFIER_INPUT_WIDTH * EI_CLASSIFIER_INPUT_HEIGHT;
     signal.get_data = &ei_camera_get_data;
 
+    // Capture image and resize/crop to model's expected input dimensions
     if (ei_camera_capture((size_t)EI_CLASSIFIER_INPUT_WIDTH, (size_t)EI_CLASSIFIER_INPUT_HEIGHT, snapshot_buf) == false) {
         ei_printf("Failed to capture image\r\n");
         free(snapshot_buf);
         return;
     }
 
-    // Run the classifier
+    // Run the classifier on the captured frame
     ei_impulse_result_t result = { 0 };
 
     EI_IMPULSE_ERROR err = run_classifier(&signal, &result, debug_nn);
     if (err != EI_IMPULSE_OK) {
         ei_printf("ERR: Failed to run classifier (%d)\n", err);
+        free(snapshot_buf);
         return;
     }
 
-    // print the predictions
+    // Print raw timing info for this individual inference
     ei_printf("Predictions (DSP: %d ms., Classification: %d ms., Anomaly: %d ms.): \n",
                 result.timing.dsp, result.timing.classification, result.timing.anomaly);
 
@@ -202,15 +283,9 @@ void loop()
             continue;
         }
         ei_printf("  %s (%f) [ x: %u, y: %u, width: %u, height: %u ]\r\n",
-                bb.label,
-                bb.value,
-                bb.x,
-                bb.y,
-                bb.width,
-                bb.height);
+                bb.label, bb.value, bb.x, bb.y, bb.width, bb.height);
     }
 
-    // Print the prediction results (classification)
 #else
     ei_printf("Predictions:\r\n");                                              //#################################################//
     for (uint16_t i = 0; i < EI_CLASSIFIER_LABEL_COUNT; i++) {                  //                                                 //
@@ -232,18 +307,73 @@ void loop()
             continue;
         }
         ei_printf("  %s (%f) [ x: %u, y: %u, width: %u, height: %u ]\r\n",
-                bb.label,
-                bb.value,
-                bb.x,
-                bb.y,
-                bb.width,
-                bb.height);
+                bb.label, bb.value, bb.x, bb.y, bb.width, bb.height);
     }
 #endif
 
+    // --------------------------------------------------------
+    // SLIDING WINDOW ACCUMULATION LOGIC
+    // Write the new sample into the circular buffer at window_index,
+    // overwriting the oldest value. Then advance the index with
+    // wrap-around so it always stays within [0, NUM_SAMPLES-1].
+    // --------------------------------------------------------
+    float human_val    = result.classification[1].value; // index 1 = "human"
+    float nonhuman_val = result.classification[0].value; // index 0 = "non human"
+    if (human_val > 0.3){
+        digitalWrite(PIN_SAMPLE_PULSE, HIGH);
+    }else{
+        digitalWrite(PIN_SAMPLE_PULSE, LOW);
+    }
 
-    free(snapshot_buf);
+    // Write new values into the circular buffer at the current write position
+    human_window[window_index]    = human_val;    // Overwrites the oldest human value
+    nonhuman_window[window_index] = nonhuman_val; // Overwrites the oldest non-human value
 
+    // Advance write index with wrap-around (0→1→2→3→4→0→1→...)
+    window_index = (window_index + 1) % NUM_SAMPLES;
+
+    // Track how many samples have been collected; cap at NUM_SAMPLES once buffer is full
+    if (samples_collected < NUM_SAMPLES) {
+        samples_collected++; // Increment until the window is full for the first time
+    }
+
+    // Show live per-sample progress in Serial Monitor
+    ei_printf("New sample | Human: %.4f | Non-Human: %.4f | Buffer filled: %d/%d\n",
+              human_val, nonhuman_val, samples_collected, NUM_SAMPLES);
+
+    // --------------------------------------------------------
+    // DECISION TRIGGER
+    // Only produce a decision once the circular buffer holds
+    // at least NUM_SAMPLES valid readings (i.e. the window is full).
+    // After that, a decision is made on EVERY new sample using
+    // the rolling average of the last NUM_SAMPLES values.
+    // --------------------------------------------------------
+    if (samples_collected >= NUM_SAMPLES) {
+
+        // Sum all values currently in the circular buffer
+        float human_sum    = 0.0f;
+        float nonhuman_sum = 0.0f;
+
+        for (uint8_t i = 0; i < NUM_SAMPLES; i++) {
+            human_sum    += human_window[i];    // Sum all human values in window
+            nonhuman_sum += nonhuman_window[i]; // Sum all non-human values in window
+        }
+
+        // Divide by window size to get the rolling average
+        float avg_human    = human_sum    / (float)NUM_SAMPLES;
+        float avg_nonhuman = nonhuman_sum / (float)NUM_SAMPLES;
+
+        // Print the rolling averaged result and the threshold-based YES/NO decision
+        print_decision(avg_human, avg_nonhuman);
+
+        // No reset needed — circular buffer naturally overwrites oldest data.
+        // Next loop iteration writes sample N+1 into the slot that held sample N-4,
+        // so the window always contains the most recent NUM_SAMPLES readings.
+    }
+    // If window not yet full, silently collect more samples before deciding
+
+    free(snapshot_buf); // Always free allocated buffer to avoid memory leaks
+    // Toggle GP16 on Pico with every sample
 }
 
 /**
@@ -260,19 +390,19 @@ bool ei_camera_init(void) {
     pinMode(14, INPUT_PULLUP);
 #endif
 
-    //initialize the camera
+    // Initialize the camera with the config struct defined above
     esp_err_t err = esp_camera_init(&camera_config);
     if (err != ESP_OK) {
-      Serial.printf("Camera init failed with error 0x%x\n", err);
-      return false;
+        Serial.printf("Camera init failed with error 0x%x\n", err);
+        return false;
     }
 
     sensor_t * s = esp_camera_sensor_get();
-    // initial sensors are flipped vertically and colors are a bit saturated
+    // Initial sensors are flipped vertically and colors are a bit saturated
     if (s->id.PID == OV3660_PID) {
-      s->set_vflip(s, 1); // flip it back
-      s->set_brightness(s, 1); // up the brightness just a bit
-      s->set_saturation(s, 0); // lower the saturation
+        s->set_vflip(s, 1);      // Flip it back
+        s->set_brightness(s, 1); // Up the brightness just a bit
+        s->set_saturation(s, 0); // Lower the saturation
     }
 
 #if defined(CAMERA_MODEL_M5STACK_WIDE)
@@ -293,11 +423,9 @@ bool ei_camera_init(void) {
  */
 void ei_camera_deinit(void) {
 
-    //deinitialize the camera
     esp_err_t err = esp_camera_deinit();
 
-    if (err != ESP_OK)
-    {
+    if (err != ESP_OK) {
         ei_printf("Camera deinit failed\n");
         return;
     }
@@ -305,7 +433,6 @@ void ei_camera_deinit(void) {
     is_initialised = false;
     return;
 }
-
 
 /**
  * @brief      Capture, rescale and crop image
@@ -316,7 +443,6 @@ void ei_camera_deinit(void) {
  *                           if ei_camera_frame_buffer is to be used for capture and resize/cropping.
  *
  * @retval     false if not initialised, image captured, rescaled or cropped failed
- *
  */
 bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf) {
     bool do_resize = false;
@@ -333,15 +459,17 @@ bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf
         return false;
     }
 
-   bool converted = fmt2rgb888(fb->buf, fb->len, PIXFORMAT_JPEG, snapshot_buf);
+    // Convert JPEG frame buffer to RGB888 format for the classifier
+    bool converted = fmt2rgb888(fb->buf, fb->len, PIXFORMAT_JPEG, snapshot_buf);
 
-   esp_camera_fb_return(fb);
+    esp_camera_fb_return(fb); // Return frame buffer to driver immediately after conversion
 
-   if(!converted){
-       ei_printf("Conversion failed\n");
-       return false;
-   }
+    if (!converted) {
+        ei_printf("Conversion failed\n");
+        return false;
+    }
 
+    // Resize/crop only if captured frame doesn't match model input dimensions
     if ((img_width != EI_CAMERA_RAW_FRAME_BUFFER_COLS)
         || (img_height != EI_CAMERA_RAW_FRAME_BUFFER_ROWS)) {
         do_resize = true;
@@ -349,21 +477,20 @@ bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf
 
     if (do_resize) {
         ei::image::processing::crop_and_interpolate_rgb888(
-        out_buf,
-        EI_CAMERA_RAW_FRAME_BUFFER_COLS,
-        EI_CAMERA_RAW_FRAME_BUFFER_ROWS,
-        out_buf,
-        img_width,
-        img_height);
+            out_buf,
+            EI_CAMERA_RAW_FRAME_BUFFER_COLS,
+            EI_CAMERA_RAW_FRAME_BUFFER_ROWS,
+            out_buf,
+            img_width,
+            img_height);
     }
-
 
     return true;
 }
 
 static int ei_camera_get_data(size_t offset, size_t length, float *out_ptr)
 {
-    // we already have a RGB888 buffer, so recalculate offset into pixel index
+    // Recalculate byte offset from pixel offset (3 bytes per pixel in RGB888)
     size_t pixel_ix = offset * 3;
     size_t pixels_left = length;
     size_t out_ptr_ix = 0;
@@ -373,12 +500,12 @@ static int ei_camera_get_data(size_t offset, size_t length, float *out_ptr)
         // due to https://github.com/espressif/esp32-camera/issues/379
         out_ptr[out_ptr_ix] = (snapshot_buf[pixel_ix + 2] << 16) + (snapshot_buf[pixel_ix + 1] << 8) + snapshot_buf[pixel_ix];
 
-        // go to the next pixel
+        // Advance to the next pixel
         out_ptr_ix++;
-        pixel_ix+=3;
+        pixel_ix += 3;
         pixels_left--;
     }
-    // and done!
+
     return 0;
 }
 
