@@ -9,8 +9,6 @@ from sx127x import SX127x
 import time
 import json
 
-print("Starting RX...")
-
 # -----------------------------------------------------------------------------
 # SPI + LoRa (SX127x) setup  — must match TX settings exactly
 # -----------------------------------------------------------------------------
@@ -42,8 +40,6 @@ lora = SX127x(
     },
 )
 
-print("RX Ready — listening for packets...")
-
 # Start listening
 lora.receive()
 
@@ -56,35 +52,20 @@ while True:
     if payload:
         try:
             data = payload.decode().strip()
-
-            # CSV format: ROVER_NAME,human_detect,latitude,longitude,satellites
             parts = data.split(",")
 
-            if len(parts) < 5:
-                raise ValueError("Incomplete packet, expected 5 fields, got {}".format(len(parts)))
+            if len(parts) >= 5:
+                json_data = {
+                    "name": parts[0],
+                    "human": int(parts[1]),
+                    "lat": float(parts[2]),
+                    "lon": float(parts[3]),
+                    "satellites": parts[4],
+                }
 
-            device       = parts[0]
-            human_detect = int(parts[1])
-            latitude     = float(parts[2])
-            longitude    = float(parts[3])
-            satellites   = parts[4]
+                print(json.dumps(json_data))  # ONLY this
 
-            # Build JSON output
-            json_data = {
-                "device":       device,
-                "human_detect": human_detect,
-                "latitude":     latitude,
-                "longitude":    longitude,
-                "satellites":   satellites,
-            }
-
-            print("JSON:", json.dumps(json_data))
-
-        except Exception as e:
-            print("Error parsing:", e)
-            print("Raw:", payload)
-
-    else:
-        print("No packet")
+        except:
+            pass  # ignore errors silently
 
     time.sleep(0.5)

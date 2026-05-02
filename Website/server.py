@@ -14,6 +14,7 @@ def get_data():
 
     try:
         data = json.loads(line)   # expect JSON from Pico
+        print("Received:", data)  # log to console
         return jsonify(data)
     except:
         return jsonify({"error": "No valid data"})

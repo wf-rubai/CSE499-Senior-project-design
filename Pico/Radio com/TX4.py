@@ -21,12 +21,12 @@ sensor1 = Pin(15, Pin.IN)
 sensor2 = Pin(14, Pin.IN)
 led = Pin(25, Pin.OUT)
 led.value(1)
-
+ 
 # -----------------------------------------------------------------------------
 # UART — GPS module (GP4 = TX, GP5 = RX)
 # -----------------------------------------------------------------------------
 uart = UART(1, baudrate=9600, tx=Pin(4), rx=Pin(5))
-
+ 
 # -----------------------------------------------------------------------------
 # SPI + LoRa (SX127x) setup
 # -----------------------------------------------------------------------------
@@ -58,14 +58,14 @@ lora = SX127x(
         "enable_CRC": True,
     },
 )
-
+ 
 print("TX Ready")
 print("Waiting for GPS fix...")
-
+ 
 # -----------------------------------------------------------------------------
 # GPS parsing helpers
 # -----------------------------------------------------------------------------
-
+ 
 def nmea_to_decimal(raw_value, direction):
     """Convert NMEA coordinate format (ddmm.mmmm) to decimal degrees."""
     if not raw_value:
@@ -74,11 +74,11 @@ def nmea_to_decimal(raw_value, direction):
         value = float(raw_value)
     except ValueError:
         return None
-
+ 
     degrees = int(value / 100)
     minutes = value - (degrees * 100)
     decimal = degrees + (minutes / 60)
-
+ 
     if direction in ("S", "W"):
         decimal = -decimal
  

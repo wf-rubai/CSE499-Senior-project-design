@@ -649,6 +649,8 @@
             </div>
             <div class="section-label">Active Vessels</div>
             <div class="boat-list" id="boatList"></div>
+            <div class="section-label">Rescue Targets</div>
+            <div class="boat-list" id="rescueList"></div>
             <div class="stats">
                 <div class="stat">
                     <div class="stat-val" id="statCount">4</div>
@@ -786,7 +788,7 @@
         if (allPts.length > 0) {
             map.fitBounds(allPts, { padding: [40, 40] });
         } else {
-            map.setView([23.8103, 90.4125], 20); // fallback (Bangladesh)
+            map.setView([23.81529472652825, 90.42606621647224], 18); // fallback (Bangladesh)
         }
 
         /* ══════════════════════
@@ -1002,7 +1004,7 @@
         ════════════════════════════════ */
         const commandCenter = {
             label: 'Command Center',
-            pos: [1.3521, 103.7500],
+            pos: [23.814800463301953, 90.42699300849604],
         };
 
 
@@ -1196,11 +1198,271 @@
     </script>
 
     <script>
-        // helper: generate random heading
-        function randomHeading() {
-            return Math.floor(Math.random() * 360);
+        /* ══════════════════════════════════════════════
+           LIVE DATA — processPicoData + rescue sidebar
+           Replaces the third <script> block entirely.
+           Depends on: map, boats, boatState, boatIcon,
+           miniBoatSvg, humanIcon, humanTargets, PRESETS
+           all defined in the blocks above.
+        ══════════════════════════════════════════════ */
+
+        let humanCount = 1;
+        function generateHumanId() {
+            return 'H-' + String(humanCount++).padStart(4, '0');
         }
 
+        /* ── Command Center position (reuse from overlay script) ── */
+        const HQ_POS = commandCenter.pos; // [lat, lng]
+
+        function haversineMetres(a, b) {
+            const R = 6371000;
+            const alpha1 = a[0] * Math.PI / 180, alpha2 = b[0] * Math.PI / 180;
+            const delalpha = (b[0] - a[0]) * Math.PI / 180;
+            const delgama = (b[1] - a[1]) * Math.PI / 180;
+            const x = Math.sin(delalpha / 2) ** 2 + Math.cos(alpha1) * Math.cos(alpha2) * Math.sin(delgama / 2) ** 2;
+            return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+        }
+
+        function formatDist(m) {
+            return m >= 1000 ? (m / 1000).toFixed(2) + ' km' : Math.round(m) + ' m';
+        }
+
+        /* ════════════════════════════
+           RESCUE TARGET SIDEBAR CARD
+        ════════════════════════════ */
+        const rescueListEl = document.getElementById('rescueList');
+
+        function addRescueCard(id, pos, radius) {
+            const dist = haversineMetres(HQ_POS, pos);
+            const card = document.createElement('div');
+            card.id = `rescue-card-${id}`;
+
+            /* reuse boat-card styles; red accent via inline var */
+            card.className = 'boat-card';
+            card.style.setProperty('--boat-color', '#ff2244');
+            card.style.cursor = 'default';
+
+            card.innerHTML = `
+                <div class="boat-card-inner" style="gap:10px">
+
+                <!-- mini human icon -->
+                <div class="boat-icon-wrap" style="border-color:#ff2244;flex-shrink:0">
+                    <img src="human_icon.png" height="35%" opacity="0.95" style="position:absolute; z-index:201;"/>
+                </div>
+
+                <!-- info -->
+                <div class="boat-info" style="min-width:0">
+                    <div class="boat-name" style="color:#ff2244;font-size:11px">${id}</div>
+                    <div class="boat-meta">Dist from HQ: ${formatDist(dist)}</div>
+                    <div class="boat-meta">Buffer: ${radius} m</div>
+                </div>
+
+                <!-- locate button -->
+                <button class="icon-btn" title="Locate on map"
+                    onclick="locateRescueTarget('${id}')"
+                    style="border-color:rgba(255,34,68,0.3);color:#ff4466;flex-shrink:0">
+                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                    <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.3"/>
+                    <circle cx="7" cy="7" r="2" fill="currentColor"/>
+                    <line x1="7" y1="0" x2="7" y2="2.5" stroke="currentColor" stroke-width="1.3"/>
+                    <line x1="7" y1="11.5" x2="7" y2="14" stroke="currentColor" stroke-width="1.3"/>
+                    <line x1="0" y1="7" x2="2.5" y2="7" stroke="currentColor" stroke-width="1.3"/>
+                    <line x1="11.5" y1="7" x2="14" y2="7" stroke="currentColor" stroke-width="1.3"/>
+                    </svg>
+                </button>
+
+                <!-- remove button -->
+                <button class="icon-btn" title="Remove target"
+                    onclick="removeRescueTarget('${id}')"
+                    style="border-color:rgba(255,34,68,0.3);color:#ff4466;flex-shrink:0">
+                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                    <line x1="2" y1="2" x2="12" y2="12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                    <line x1="12" y1="2" x2="2"  y2="12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                    </svg>
+                </button>
+
+                </div>`;
+
+            rescueListEl.appendChild(card);
+        }
+
+        /* rescue map layer registry */
+        const rescueLayers = {}; /* id → { circle, marker } */
+
+        function locateRescueTarget(id) {
+            const t = humanTargets.find(h => h.id === id);
+            if (t) map.flyTo(t.pos, 17, { duration: 1.2 });
+        }
+
+        function removeRescueTarget(id) {
+            /* remove map layers */
+            if (rescueLayers[id]) {
+                map.removeLayer(rescueLayers[id].circle);
+                map.removeLayer(rescueLayers[id].marker);
+                delete rescueLayers[id];
+            }
+            /* remove from humanTargets array */
+            const idx = humanTargets.findIndex(h => h.id === id);
+            if (idx !== -1) humanTargets.splice(idx, 1);
+            /* remove card */
+            const card = document.getElementById(`rescue-card-${id}`);
+            if (card) card.remove();
+        }
+
+        /* ════════════════════════════
+           processPicoData — FIXED
+           Now writes into boatState (same
+           object used by all toggle fns)
+           and properly creates sidebar cards.
+        ════════════════════════════ */
+        function processPicoData(data) {
+            const { name, human, lat, lon } = data;
+            if (!name || lat == null || lon == null) return;
+
+            const hdg = data.hdg ?? 90; /* use hdg from payload if available */
+
+            /* ── find or create boat ── */
+            let boat = boats.find(b => b.id === name);
+
+            if (!boat) {
+                /* ── brand-new vessel ── */
+                boat = {
+                    id: name,
+                    name: name.toUpperCase(),
+                    color: getRandomColor(),
+                    waypoints: [],
+                };
+                boats.push(boat);
+
+                /* polyline — hidden by default, matches original behaviour */
+                const poly = L.polyline([], {
+                    color: boat.color, weight: 2.5, opacity: 0.85, dashArray: '8 4',
+                });
+
+                /* marker — always visible */
+                const marker = L.marker([lat, lon], { icon: boatIcon(boat.color, hdg) })
+                    .addTo(map);
+
+                marker.on('click', () => toggleBoatPath(boat.id));
+
+                /* ★ write into boatState so every existing fn works ★ */
+                boatState[boat.id] = { poly, marker, pathVisible: false };
+
+                /* sidebar card */
+                const card = document.createElement('div');
+                card.className = 'boat-card';
+                card.id = `card-${boat.id}`;
+                card.style.setProperty('--boat-color', boat.color);
+                card.innerHTML = `
+      <div class="boat-card-inner">
+        <div class="boat-icon-wrap" id="iconwrap-${boat.id}"
+             style="border-color:${boat.color};color:${boat.color}">
+          ${miniBoatSvg(boat.color)}
+        </div>
+        <div class="boat-info">
+          <div class="boat-name" id="name-${boat.id}" style="color:${boat.color}">${boat.name}</div>
+          <div class="boat-meta" id="meta-${boat.id}">0 waypoints · hdg ${hdg}° · hidden</div>
+        </div>
+        <div class="boat-actions">
+          <button class="icon-btn" title="Edit color" onclick="openModal('${boat.id}')">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+              <circle cx="7" cy="7" r="3.5" stroke="currentColor" stroke-width="1.3"/>
+              <circle cx="7" cy="7" r="1" fill="currentColor"/>
+              <line x1="7" y1="0" x2="7" y2="3" stroke="currentColor" stroke-width="1.3"/>
+              <line x1="7" y1="11" x2="7" y2="14" stroke="currentColor" stroke-width="1.3"/>
+              <line x1="0" y1="7" x2="3" y2="7" stroke="currentColor" stroke-width="1.3"/>
+              <line x1="11" y1="7" x2="14" y2="7" stroke="currentColor" stroke-width="1.3"/>
+            </svg>
+          </button>
+        </div>
+        <div class="swatch-btn" id="swatch-${boat.id}"
+             style="background:${boat.color}" onclick="openModal('${boat.id}')"></div>
+      </div>`;
+
+                card.addEventListener('click', e => {
+                    if (e.target.closest('.icon-btn') || e.target.closest('.swatch-btn')) return;
+                    toggleBoatPath(boat.id);
+                });
+
+                document.getElementById('boatList').appendChild(card);
+                document.getElementById('boatCount').textContent = boats.length;
+                document.getElementById('statCount').textContent = boats.length;
+            }
+
+            /* ── add waypoint ── */
+            boat.waypoints.push({ lat, lng: lon, hdg });
+
+            /* ── update map marker + polyline ── */
+            const state = boatState[name];
+            state.marker.setLatLng([lat, lon]);
+            state.marker.setIcon(boatIcon(boat.color, hdg));
+            state.poly.setLatLngs(boat.waypoints.map(w => [w.lat, w.lng]));
+            state.marker.bindTooltip(
+                `<b>${boat.name}</b><br>${boat.waypoints.length} pts · hdg ${hdg}°`,
+                { direction: 'top', permanent: false }
+            );
+
+            /* ── update sidebar meta ── */
+            const metaEl = document.getElementById(`meta-${name}`);
+            if (metaEl) {
+                metaEl.textContent =
+                    `${boat.waypoints.length} waypoints · hdg ${hdg}° · ${state.pathVisible ? 'visible' : 'hidden'}`;
+            }
+
+            /* ── human detection ── */
+            if (human === 1) {
+                const key = `${lat.toFixed(5)}_${lon.toFixed(5)}`;
+                if (!humanState[key]) {
+                    humanState[key] = true;
+                    const id = generateHumanId();
+                    const pos = [lat, lon];
+                    const radius = 30;
+
+                    const circle = L.circle(pos, {
+                        radius,
+                        color: '#ff2244', weight: 1.2,
+                        fillColor: '#ff2244', fillOpacity: 0.07,
+                        dashArray: '5 4',
+                    }).addTo(map);
+
+                    const marker = L.marker(pos, { icon: humanIcon() })
+                        .addTo(map)
+                        .bindTooltip(
+                            `<b style="color:#ff6680">${id}</b><br>
+           <span style="font-size:11px;opacity:0.7">${pos[0].toFixed(4)}, ${pos[1].toFixed(4)}</span><br>
+           <span style="font-size:11px;color:#ff4466">⚠ Buffer: ${radius} m</span>`,
+                            { direction: 'top', permanent: false }
+                        );
+
+                    /* register layers so remove button can clean them up */
+                    rescueLayers[id] = { circle, marker };
+
+                    humanTargets.push({ id, pos, radius });
+                    addRescueCard(id, pos, radius);
+
+                    alert(`⚠ Survivor detected! [${id}]\nLat: ${lat.toFixed(5)}  Lon: ${lon.toFixed(5)}`);
+                }
+            }
+        }
+
+        function getRandomColor() {
+            return PRESETS[Math.floor(Math.random() * PRESETS.length)];
+        }
+
+        /* ════════════════════════════
+           POLLING LOOP
+        ════════════════════════════ */
+        setInterval(async () => {
+            try {
+                const res = await fetch('http://localhost:5001/data');
+                const data = await res.json();
+                processPicoData(data);
+            } catch (e) {
+                console.warn('Poll error:', e);
+            }
+        }, 1000);
+    </script>
+    <!-- <script>
         // helper: generate unique human ID
         let humanCount = 1;
         function generateHumanId() {
@@ -1209,7 +1471,7 @@
 
         // main function (call this with JSON from Flask)
         function processPicoData(data) {
-            let { name, lat, lon, human } = data;
+            let { name, human, lat, lon, satellites } = data;
 
             if (!name || lat === undefined || lon === undefined) return;
 
@@ -1241,10 +1503,48 @@
                     marker,
                     poly
                 };
+
+                // create sidebar card
+                const listEl = document.getElementById('boatList');
+                const last = boat.waypoints[boat.waypoints.length - 1];
+                const card = document.createElement('div');
+                card.className = 'boat-card';
+                card.id = `card-${boat.id}`;
+                card.style.setProperty('--boat-color', boat.color);
+                card.innerHTML = `
+                <div class="boat-card-inner">
+                    <div class="boat-icon-wrap" id="iconwrap-${boat.id}" style="border-color:${boat.color};color:${boat.color}">
+                        ${miniBoatSvg(boat.color)}
+                    </div>
+                    <div class="boat-info">
+                        <div class="boat-name" id="name-${boat.id}" style="color:${boat.color}">${boat.name}</div>
+                    </div>
+                    <div class="boat-actions">
+                        <button class="icon-btn" title="Edit color" onclick="openModal('${boat.id}')">
+                        <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                            <circle cx="7" cy="7" r="3.5" stroke="currentColor" stroke-width="1.3"/>
+                            <circle cx="7" cy="7" r="1" fill="currentColor"/>
+                            <line x1="7" y1="0" x2="7" y2="3" stroke="currentColor" stroke-width="1.3"/>
+                            <line x1="7" y1="11" x2="7" y2="14" stroke="currentColor" stroke-width="1.3"/>
+                            <line x1="0" y1="7" x2="3" y2="7" stroke="currentColor" stroke-width="1.3"/>
+                            <line x1="11" y1="7" x2="14" y2="7" stroke="currentColor" stroke-width="1.3"/>
+                        </svg>
+                        </button>
+                    </div>
+                    <div class="swatch-btn" id="swatch-${boat.id}" style="background:${boat.color}" onclick="openModal('${boat.id}')"></div>
+                </div>`;
+                card.addEventListener('click', e => {
+                    if (e.target.closest('.icon-btn') || e.target.closest('.swatch-btn')) return;
+                    toggleBoatPath(boat.id);
+                });
+                listEl.appendChild(card);
+
+                document.getElementById('boatCount').textContent = boats.length;
+                document.getElementById('statCount').textContent = boats.length;
             }
 
             // 🟢 ADD WAYPOINT
-            const hdg = randomHeading();
+            const hdg = 90;
 
             boat.waypoints.push({
                 lat,
@@ -1252,9 +1552,9 @@
                 hdg
             });
 
-            if (boat.waypoints.length > 50) {
-                boat.waypoints.shift();
-            }
+            // if (boat.waypoints.length > 50) {
+            //     boat.waypoints.shift();
+            // }
 
             // 🟢 UPDATE MAP
             const state = boatStatus[name];
@@ -1278,7 +1578,7 @@
                     const id = generateHumanId();
 
                     const circle = L.circle([lat, lon], {
-                        radius: 150,
+                        radius: 80,
                         color: '#ff2244',
                         weight: 1.2,
                         fillOpacity: 0.07
@@ -1295,14 +1595,16 @@
                     humanTargets.push({
                         id,
                         pos: [lat, lon],
-                        radius: 150
+                        radius: 30
                     });
+
+                    alert("Surviver detected nearby! Check the map for details.");
                 }
             }
         }
         // random color for new boats
         function getRandomColor() {
-            return "#" + Math.floor(Math.random() * 16777215).toString(16);
+            return PRESETS[Math.floor(Math.random() * PRESETS.length)];
         }
 
         /* =═════════════════════════════
@@ -1323,7 +1625,7 @@
                 console.log("Error:", e);
             }
         }, 1000);
-    </script>
+    </script> -->
 </body>
 
 </html>
