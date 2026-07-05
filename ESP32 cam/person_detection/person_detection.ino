@@ -72,8 +72,11 @@
 #define HREF_GPIO_NUM     23
 #define PCLK_GPIO_NUM     22
 
-#define PIN_HUMAN_DETECTED   12   // GP0 on Pico — HIGH when human present
-#define PIN_SAMPLE_PULSE     13   // GP16 on Pico — toggles every sample
+#define PIN_HUMAN_DETECTED   12   
+#define PIN_SAMPLE_PULSE     13   
+#define NUM_SAMPLES          5       
+#define HUMAN_THRESHOLD      0.3f
+#define SAMPLE_INTERVAL_MS   350
 
 #else
 #error "Camera model not selected"
@@ -83,13 +86,6 @@
 #define EI_CAMERA_RAW_FRAME_BUFFER_COLS           320
 #define EI_CAMERA_RAW_FRAME_BUFFER_ROWS           240
 #define EI_CAMERA_FRAME_BYTE_SIZE                 3
-
-// ============================================================
-// SLIDING WINDOW & THRESHOLD CONFIGURATION
-// ============================================================
-#define NUM_SAMPLES          5       // Window size: average over last 5 readings
-#define HUMAN_THRESHOLD      0.3f    // If sliding avg human confidence >= 0.3 → YES, else NO
-#define SAMPLE_INTERVAL_MS   350     // 350ms between each sample → decision every 1750ms (5 x 350ms)
 
 /* Private variables ------------------------------------------------------- */
 static bool debug_nn = false; // Set this to true to see e.g. features generated from the raw signal
@@ -113,10 +109,10 @@ uint8_t *snapshot_buf; // Points to the output of the capture
 //   Sample 6 → buffer: [6, 2, 3, 4, 5]  window full → decision from avg(2,3,4,5,6)
 //   Sample 7 → buffer: [6, 7, 3, 4, 5]  window full → decision from avg(3,4,5,6,7)
 // ============================================================
-static float   human_window[NUM_SAMPLES]    = {0}; // Circular buffer for human confidence values
-static float   nonhuman_window[NUM_SAMPLES] = {0}; // Circular buffer for non-human confidence values
-static uint8_t window_index                 = 0;   // Current write position in the circular buffer
-static uint8_t samples_collected            = 0;   // Total samples seen; caps at NUM_SAMPLES once full
+static float   human_window[NUM_SAMPLES]    = {0}; 
+static float   nonhuman_window[NUM_SAMPLES] = {0}; 
+static uint8_t window_index                 = 0;   
+static uint8_t samples_collected            = 0;   
 
 static camera_config_t camera_config = {
     .pin_pwdn = PWDN_GPIO_NUM,
@@ -160,32 +156,17 @@ bool ei_camera_init(void);
 void ei_camera_deinit(void);
 bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf);
 
-// ============================================================
-// HELPER: Print the final averaged YES/NO decision to Serial
-// Called after every sample once the window is full
-// ============================================================
 void print_decision(float avg_human, float avg_nonhuman) {
-    ei_printf("\n========================================\n");
-    ei_printf("  SLIDING WINDOW RESULT (last %d samples)\n", NUM_SAMPLES);
-    ei_printf("========================================\n");
-
-    // Show both averaged confidence values as percentages
-    ei_printf("  Avg Human Confidence    : %.2f%%\n", avg_human * 100.0f);
-    ei_printf("  Avg Non-Human Confidence: %.2f%%\n", avg_nonhuman * 100.0f);
-    ei_printf("----------------------------------------\n");
-
-    // Threshold check:
     // avg_human >= HUMAN_THRESHOLD (0.3) → YES, human present
-    // avg_human <  HUMAN_THRESHOLD (0.3) → NO, no human detected
     if (avg_human >= HUMAN_THRESHOLD) {
         ei_printf("  DECISION  :  >>> YES - HUMAN DETECTED <<<\n");
         ei_printf("  CONFIDENCE:  %.1f%%\n", avg_human * 100.0f);
-        digitalWrite(PIN_HUMAN_DETECTED, HIGH);   // ← GP0 HIGH
+        digitalWrite(PIN_HUMAN_DETECTED, HIGH);
     } else {
         ei_printf("  DECISION  :  >>> NO - NO HUMAN DETECTED <<<\n");
         ei_printf("  CONFIDENCE:  %.1f%% (below %.0f%% threshold)\n",
                 avg_human * 100.0f, HUMAN_THRESHOLD * 100.0f);
-        digitalWrite(PIN_HUMAN_DETECTED, LOW);    // ← GP0 LOW
+        digitalWrite(PIN_HUMAN_DETECTED, LOW);
     }
 
     ei_printf("========================================\n\n");
@@ -205,7 +186,7 @@ void setup()
     ei_printf("Config: sliding window=%d | %.0fms interval | decision every ~%.0fms | %.0f%% threshold\n",
               NUM_SAMPLES,
               (float)SAMPLE_INTERVAL_MS,
-              (float)(NUM_SAMPLES * SAMPLE_INTERVAL_MS), // 5 x 350 = 1750ms for first decision
+              (float)(NUM_SAMPLES * SAMPLE_INTERVAL_MS),
               HUMAN_THRESHOLD * 100.0f);
 
     if (ei_camera_init() == false) {
@@ -229,13 +210,6 @@ void setup()
 */
 void loop()
 {
-    // --------------------------------------------------------
-    // UNIFORM 350ms INTERVAL
-    // Sits at the top of loop() so every single sample is
-    // spaced exactly 350ms apart. With a window of 5 samples,
-    // the first decision arrives after 5 x 350ms = 1750ms,
-    // then a new decision is produced every 350ms after that.
-    // --------------------------------------------------------
     if (ei_sleep(SAMPLE_INTERVAL_MS) != EI_IMPULSE_OK) {
         return;
     }
@@ -311,69 +285,52 @@ void loop()
     }
 #endif
 
-    // --------------------------------------------------------
-    // SLIDING WINDOW ACCUMULATION LOGIC
-    // Write the new sample into the circular buffer at window_index,
-    // overwriting the oldest value. Then advance the index with
-    // wrap-around so it always stays within [0, NUM_SAMPLES-1].
-    // --------------------------------------------------------
-    float human_val    = result.classification[1].value; // index 1 = "human"
-    float nonhuman_val = result.classification[0].value; // index 0 = "non human"
+                                                    //#################################################################//
+                                                    // SLIDING WINDOW ACCUMULATION LOGIC                               //
+                                                    // Write the new sample into the circular buffer at window_index,  //
+                                                    // overwriting the oldest value. Then advance the index with       //
+                                                    // wrap-around so it always stays within [0, NUM_SAMPLES-1].       //
+                                                    //#################################################################//
+
+
+    float human_val    = result.classification[1].value;    // index 1 = "human"
+    float nonhuman_val = result.classification[0].value;    // index 0 = "non human"
+
     if (human_val > 0.3){
         digitalWrite(PIN_SAMPLE_PULSE, HIGH);
     }else{
         digitalWrite(PIN_SAMPLE_PULSE, LOW);
     }
 
-    // Write new values into the circular buffer at the current write position
-    human_window[window_index]    = human_val;    // Overwrites the oldest human value
-    nonhuman_window[window_index] = nonhuman_val; // Overwrites the oldest non-human value
+    human_window[window_index]    = human_val;
+    nonhuman_window[window_index] = nonhuman_val;
 
-    // Advance write index with wrap-around (0→1→2→3→4→0→1→...)
     window_index = (window_index + 1) % NUM_SAMPLES;
 
-    // Track how many samples have been collected; cap at NUM_SAMPLES once buffer is full
     if (samples_collected < NUM_SAMPLES) {
-        samples_collected++; // Increment until the window is full for the first time
+        samples_collected++;
     }
 
-    // Show live per-sample progress in Serial Monitor
     ei_printf("New sample | Human: %.4f | Non-Human: %.4f | Buffer filled: %d/%d\n",
               human_val, nonhuman_val, samples_collected, NUM_SAMPLES);
 
-    // --------------------------------------------------------
-    // DECISION TRIGGER
-    // Only produce a decision once the circular buffer holds
-    // at least NUM_SAMPLES valid readings (i.e. the window is full).
-    // After that, a decision is made on EVERY new sample using
-    // the rolling average of the last NUM_SAMPLES values.
-    // --------------------------------------------------------
     if (samples_collected >= NUM_SAMPLES) {
 
-        // Sum all values currently in the circular buffer
         float human_sum    = 0.0f;
         float nonhuman_sum = 0.0f;
 
         for (uint8_t i = 0; i < NUM_SAMPLES; i++) {
-            human_sum    += human_window[i];    // Sum all human values in window
-            nonhuman_sum += nonhuman_window[i]; // Sum all non-human values in window
+            human_sum    += human_window[i];
+            nonhuman_sum += nonhuman_window[i];
         }
 
-        // Divide by window size to get the rolling average
         float avg_human    = human_sum    / (float)NUM_SAMPLES;
         float avg_nonhuman = nonhuman_sum / (float)NUM_SAMPLES;
 
-        // Print the rolling averaged result and the threshold-based YES/NO decision
         print_decision(avg_human, avg_nonhuman);
-
-        // No reset needed — circular buffer naturally overwrites oldest data.
-        // Next loop iteration writes sample N+1 into the slot that held sample N-4,
-        // so the window always contains the most recent NUM_SAMPLES readings.
     }
-    // If window not yet full, silently collect more samples before deciding
 
-    free(snapshot_buf); // Always free allocated buffer to avoid memory leaks
-    // Toggle GP16 on Pico with every sample
+    free(snapshot_buf);
 }
 
 /**
