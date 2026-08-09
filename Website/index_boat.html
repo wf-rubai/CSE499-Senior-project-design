@@ -596,6 +596,239 @@
             }
         }
     </style>
+
+    <!-- ── Marker and Area ── -->
+    <style id="map-controls-style">
+        /* ── Custom Leaflet control buttons ── */
+        .leaflet-control-custom-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .custom-map-btn {
+            width: 30px;
+            height: 30px;
+            background: #0d1117;
+            border: 1px solid rgba(0, 200, 180, 0.25);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.18s;
+            color: #5a7a9a;
+        }
+
+        .custom-map-btn:hover {
+            border-color: var(--accent, #00c8b4);
+            color: var(--accent, #00c8b4);
+            background: rgba(0, 200, 180, 0.1);
+        }
+
+        .custom-map-btn.active {
+            border-color: var(--accent, #00c8b4);
+            color: var(--accent, #00c8b4);
+            background: rgba(0, 200, 180, 0.15);
+            box-shadow: 0 0 8px -2px var(--accent, #00c8b4);
+        }
+
+        /* ── Pointer marker icon ── */
+        .wp-marker-wrap {
+            position: relative;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .wp-marker-pulse {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            border: 1.5px solid #00c8b4;
+            animation: wp-pulse 1.8s ease-out infinite;
+            transform-origin: 50% 50%;
+        }
+
+        @keyframes wp-pulse {
+            0% {
+                transform: scale(0.6);
+                opacity: 0.9;
+            }
+
+            100% {
+                transform: scale(2.2);
+                opacity: 0;
+            }
+        }
+
+        /* ── Pointer popup ── */
+        .wp-popup {
+            position: absolute;
+            z-index: 9000;
+            background: #0e1018;
+            border: 1px solid rgba(0, 200, 180, 0.3);
+            border-radius: 8px;
+            padding: 12px 14px;
+            width: 210px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7), 0 0 20px -6px #00c8b4;
+            font-family: 'Rajdhani', sans-serif;
+            pointer-events: all;
+        }
+
+        .wp-popup::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #00c8b4, transparent);
+        }
+
+        .wp-popup-title {
+            font-family: 'Orbitron', monospace;
+            font-size: 10px;
+            letter-spacing: 0.12em;
+            color: #00c8b4;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        .wp-popup-coords {
+            font-size: 11px;
+            color: #5a7a9a;
+            font-family: monospace;
+            margin-bottom: 10px;
+            letter-spacing: 0.04em;
+        }
+
+        .wp-boat-list {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        .wp-boat-opt {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 9px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            background: #141720;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            color: #cceee8;
+        }
+
+        .wp-boat-opt:hover {
+            background: #1a2530;
+        }
+
+        .wp-boat-opt .wp-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            box-shadow: 0 0 5px currentColor;
+        }
+
+        .wp-boat-opt .wp-sent {
+            margin-left: auto;
+            font-size: 10px;
+            color: #00ffaa;
+            letter-spacing: 0.05em;
+            display: none;
+        }
+
+        .wp-boat-opt.sent .wp-sent {
+            display: block;
+        }
+
+        .wp-boat-opt.sent {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .wp-cancel-btn {
+            width: 100%;
+            padding: 6px;
+            background: transparent;
+            border: 1px solid rgba(255, 34, 68, 0.3);
+            border-radius: 4px;
+            color: #ff4466;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .wp-cancel-btn:hover {
+            background: rgba(255, 34, 68, 0.1);
+            border-color: #ff2244;
+        }
+
+        /* ── Area selection rectangle ── */
+        .area-rect-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            z-index: 800;
+        }
+
+        /* ── Area popup (reuses wp-popup styles) ── */
+        .area-popup {
+            position: absolute;
+            z-index: 9000;
+            background: #0e1018;
+            border: 1px solid rgba(0, 200, 180, 0.3);
+            border-radius: 8px;
+            padding: 12px 14px;
+            width: 220px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7), 0 0 20px -6px #00c8b4;
+            font-family: 'Rajdhani', sans-serif;
+            pointer-events: all;
+        }
+
+        .area-popup::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #00c8b4, transparent);
+        }
+
+        .area-info {
+            font-size: 11px;
+            color: #5a7a9a;
+            font-family: monospace;
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+
+        /* ── cursor states ── */
+        .leaflet-container.mode-pointer {
+            cursor: crosshair !important;
+        }
+
+        .leaflet-container.mode-area {
+            cursor: crosshair !important;
+        }
+    </style>
+
 </head>
 
 <body>
@@ -1007,6 +1240,36 @@
             pos: [23.814800463301953, 90.42699300849604],
         };
 
+        // navigator.geolocation.getCurrentPosition(
+        //     (position) => {
+        //         // console.log(`Latitude: ${position.coords.latitude}`);
+        //         // console.log(`Longitude: ${position.coords.longitude}`);
+        //         // console.log(`Accuracy: within ${position.coords.accuracy} meters`);
+        //         commandCenter.pos = [position.coords.latitude, position.coords.longitude];
+        //     },
+        //     (error) => {
+        //         console.error(`Error getting location: ${error.message}`);
+        //     },
+        //     { enableHighAccuracy: true }
+        // );
+        // Fetch location data from ipapi using JSON format
+
+        // async function initWithLocation() {
+        //     try {
+        //         const response = await fetch('https://ipapi.co/json/');
+        //         const data = await response.json();
+        //         commandCenter.pos = [data.latitude, data.longitude];
+
+        //         console.log(`IP location success: ${data.city}, ${data.region}, ${data.country_name}`);
+        //     } catch (error) {
+        //         console.error(`IP location failed: ${error.message}`);
+        //         // falls through with hardcoded coords
+        //     } finally {
+        //         initMap(); // always runs after, success or fail
+        //     }
+        // }
+
+        // initWithLocation();
 
         /* ════════════════════════════════
            HUMAN ICON BUILDER
@@ -1462,6 +1725,528 @@
             }
         }, 1000);
     </script>
+
+    <script>
+        /* ══════════════════════════════════════════════
+           MAP CONTROLS — Add Pointer + Select Area
+           Depends on: map (Leaflet), boats[], PRESETS
+           Server endpoint: POST http://localhost:5001/send
+        ══════════════════════════════════════════════ */
+
+        /* ────────────────────────────
+           STATE
+        ──────────────────────────── */
+        let activeMode = null;       // 'pointer' | 'area' | null
+        let waypoints = [];         // { marker, popupEl, id }
+        let wpCounter = 0;
+
+        let areaDragStart = null;    // { x, y, lat, lng }
+        let areaRect = null;    // { svgEl, rectEl }
+        let areaPopupEl = null;
+        let areaCorners = null;    // { sw, ne } in latlng
+        let persistentAreas = [];  // { svgEl } — areas locked to map
+
+        /* ────────────────────────────
+           CUSTOM LEAFLET CONTROL
+        ──────────────────────────── */
+        const CustomControl = L.Control.extend({
+            options: { position: 'topright' },
+
+            onAdd() {
+                const wrap = L.DomUtil.create('div', 'leaflet-control-custom-wrap leaflet-bar');
+                L.DomEvent.disableClickPropagation(wrap);
+
+                /* ── Add Pointer button ── */
+                const btnPointer = document.createElement('div');
+                btnPointer.className = 'custom-map-btn';
+                btnPointer.id = 'btn-mode-pointer';
+                btnPointer.title = 'Add waypoint pointer';
+                btnPointer.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="7" r="5" stroke="currentColor" stroke-width="1.4"/>
+                        <circle cx="8" cy="7" r="2" fill="currentColor"/>
+                        <line x1="8" y1="0" x2="8" y2="3"   stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                        <line x1="8" y1="11" x2="8" y2="14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                        <line x1="1" y1="7" x2="4" y2="7"   stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                        <line x1="12" y1="7" x2="15" y2="7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                    </svg>`;
+                btnPointer.addEventListener('click', () => toggleMode('pointer'));
+                wrap.appendChild(btnPointer);
+
+                /* ── Select Area button ── */
+                const btnArea = document.createElement('div');
+                btnArea.className = 'custom-map-btn';
+                btnArea.id = 'btn-mode-area';
+                btnArea.title = 'Select rectangular area';
+                btnArea.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <rect x="2" y="2" width="12" height="12" rx="2"
+                        stroke="currentColor" stroke-width="1.4" stroke-dasharray="3 2"/>
+                        <circle cx="2"  cy="2"  r="1.2" fill="currentColor"/>
+                        <circle cx="14" cy="2"  r="1.2" fill="currentColor"/>
+                        <circle cx="2"  cy="14" r="1.2" fill="currentColor"/>
+                        <circle cx="14" cy="14" r="1.2" fill="currentColor"/>
+                    </svg>`;
+                btnArea.addEventListener('click', () => toggleMode('area'));
+                wrap.appendChild(btnArea);
+
+                return wrap;
+            }
+        });
+
+        map.addControl(new CustomControl());
+
+        /* ────────────────────────────
+           MODE TOGGLE
+        ──────────────────────────── */
+        function toggleMode(mode) {
+            if (activeMode === mode) {
+                setMode(null);
+            } else {
+                setMode(mode);
+            }
+        }
+
+        function setMode(mode) {
+            activeMode = mode;
+
+            /* reset button states */
+            document.getElementById('btn-mode-pointer')?.classList.toggle('active', mode === 'pointer');
+            document.getElementById('btn-mode-area')?.classList.toggle('active', mode === 'area');
+
+            /* cursor */
+            const container = map.getContainer();
+            container.classList.remove('mode-pointer', 'mode-area');
+            if (mode) container.classList.add(`mode-${mode}`);
+
+            /* drag handlers */
+            if (mode === 'area') {
+                map.dragging.disable();
+            } else {
+                map.dragging.enable();
+                clearAreaDrag();
+            }
+        }
+
+        /* ────────────────────────────
+           MAP CLICK → ADD POINTER
+        ──────────────────────────── */
+        map.on('click', function (e) {
+            if (activeMode !== 'pointer') return;
+            addWaypoint(e.latlng);
+            setMode(null);   /* auto-exit pointer mode after placing */
+        });
+
+        /* ────────────────────────────
+           WAYPOINT MARKER + POPUP
+        ──────────────────────────── */
+        function waypointIcon(color) {
+            const c = color || '#00c8b4';
+            const html = `
+                <div class="wp-marker-wrap" style="filter:drop-shadow(0 0 5px ${c})">
+                <div class="wp-marker-pulse" style="border-color:${c}"></div>
+                <svg width="28" height="28" viewBox="0 0 28 28">
+                    <circle cx="14" cy="14" r="12"
+                    fill="rgba(0,0,0,0.65)" stroke="${c}" stroke-width="1.5"/>
+                    <circle cx="14" cy="14" r="12"
+                    fill="none" stroke="${c}" stroke-width="0.5"
+                    stroke-dasharray="2 3" opacity="0.4"/>
+                    <circle cx="14" cy="14" r="4.5" fill="${c}" opacity="0.9"/>
+                    <circle cx="14" cy="14" r="2"   fill="rgba(0,0,0,0.6)"/>
+                    <line x1="14" y1="2"  x2="14" y2="6"  stroke="${c}" stroke-width="1.2" stroke-linecap="round"/>
+                    <line x1="14" y1="22" x2="14" y2="26" stroke="${c}" stroke-width="1.2" stroke-linecap="round"/>
+                    <line x1="2"  y1="14" x2="6"  y2="14" stroke="${c}" stroke-width="1.2" stroke-linecap="round"/>
+                    <line x1="22" y1="14" x2="26" y2="14" stroke="${c}" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+                </div>`;
+            return L.divIcon({ html, className: '', iconSize: [28, 28], iconAnchor: [14, 14] });
+        }
+
+        function addWaypoint(latlng) {
+            const id = ++wpCounter;
+            const marker = L.marker([latlng.lat, latlng.lng], {
+                icon: waypointIcon('#00c8b4'),
+                zIndexOffset: 500,
+            }).addTo(map);
+
+            /* build popup div and attach to map container */
+            const popupEl = buildWpPopup(id, latlng, marker);
+            document.querySelector('.leaflet-map-pane').appendChild(popupEl);
+
+            const wp = { id, marker, popupEl, latlng, assigned: false };
+            waypoints.push(wp);
+
+            /* reposition popup whenever map moves */
+            function reposition() { positionWpPopup(wp); }
+            map.on('move zoom', reposition);
+            wp._reposition = reposition;
+
+            positionWpPopup(wp);
+        }
+
+        function buildWpPopup(id, latlng, marker) {
+            const el = document.createElement('div');
+            el.className = 'wp-popup';
+            el.id = `wp-popup-${id}`;
+
+            const boatOptions = boats.map(b => `
+                <div class="wp-boat-opt" id="wp-opt-${id}-${b.id}"
+                    onclick="sendWaypointToBoat(${id}, '${b.id}', ${latlng.lat}, ${latlng.lng})">
+                <div class="wp-dot" style="background:${b.color};color:${b.color}"></div>
+                <span>${b.name}</span>
+                <span class="wp-sent">✓ SENT</span>
+                </div>`).join('');
+
+            const noBoats = boats.length === 0
+                ? `<div style="font-size:11px;color:#5a7a9a;padding:4px 0">No vessels online yet</div>`
+                : '';
+
+            el.innerHTML = `
+                <div class="wp-popup-title">Send Waypoint</div>
+                <div class="wp-popup-coords">
+                ${latlng.lat.toFixed(6)}<br>
+                ${latlng.lng.toFixed(6)}
+                </div>
+                <div class="wp-boat-list" id="wp-boat-list-${id}">
+                ${boatOptions}${noBoats}
+                </div>
+                <button class="wp-cancel-btn" onclick="removeWaypoint(${id})">Cancel / Remove</button>`;
+
+            return el;
+        }
+
+        function positionWpPopup(wp) {
+            const pt = map.latLngToContainerPoint(wp.latlng);
+            const el = wp.popupEl;
+            const mapEl = map.getContainer();
+            const mapH = mapEl.clientHeight;
+            const mapW = mapEl.clientWidth;
+
+            const popW = 210, popH = el.offsetHeight || 180;
+            const margin = 18; /* gap between marker and popup */
+
+            /* prefer above, fall back to below */
+            let top = pt.y - popH - margin;
+            let left = pt.x - popW / 2;
+
+            if (top < 8) top = pt.y + margin;           /* flip below */
+            if (left < 8) left = 8;                      /* clamp left */
+            if (left + popW > mapW - 8) left = mapW - popW - 8; /* clamp right */
+
+            /* offset for leaflet-map-pane transform */
+            const pane = map.getContainer().querySelector('.leaflet-map-pane');
+            const paneStyle = window.getComputedStyle(pane);
+            const mat = new DOMMatrixReadOnly(paneStyle.transform);
+
+            el.style.left = (left - mat.m41) + 'px';
+            el.style.top = (top - mat.m42) + 'px';
+            el.style.position = 'absolute';
+        }
+
+        /* ────────────────────────────
+           SEND WAYPOINT TO BOAT
+        ──────────────────────────── */
+        async function sendWaypointToBoat(wpId, boatId, lat, lng) {
+            const payload = {
+                target: boatId,
+                cmd: 'goto',
+                lat: parseFloat(lat.toFixed(7)),
+                lng: parseFloat(lng.toFixed(7)),
+            };
+
+            try {
+                const res = await fetch('http://localhost:5001/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const result = await res.json();
+                if (result.success) {
+                    /* mark option as sent */
+                    const optEl = document.getElementById(`wp-opt-${wpId}-${boatId}`);
+                    if (optEl) optEl.classList.add('sent');
+
+                    /* update marker color to match the assigned boat */
+                    const boat = boats.find(b => b.id === boatId);
+                    const wp = waypoints.find(w => w.id === wpId);
+                    if (boat && wp) {
+                        wp.marker.setIcon(waypointIcon(boat.color));
+                        wp.assigned = true;
+                    }
+                    console.log(`✓ Waypoint sent to ${boatId}`, payload);
+                } else {
+                    console.warn('Send failed:', result.error);
+                }
+            } catch (e) {
+                console.warn('Fetch error:', e);
+            }
+        }
+
+        /* ────────────────────────────
+           REMOVE WAYPOINT
+        ──────────────────────────── */
+        function removeWaypoint(id) {
+            const idx = waypoints.findIndex(w => w.id === id);
+            if (idx === -1) return;
+            const wp = waypoints[idx];
+            map.removeLayer(wp.marker);
+            map.off('move zoom', wp._reposition);
+            wp.popupEl.remove();
+            waypoints.splice(idx, 1);
+        }
+
+        /* ────────────────────────────
+           AREA SELECTION
+           mousedown → drag → mouseup
+        ──────────────────────────── */
+        const mapContainer = map.getContainer();
+
+        mapContainer.addEventListener('mousedown', function (e) {
+            if (activeMode !== 'area') return;
+            e.preventDefault();
+
+            clearAreaDrag();
+
+            const rect = mapContainer.getBoundingClientRect();
+            areaDragStart = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top,
+                lat: map.containerPointToLatLng([e.clientX - rect.left, e.clientY - rect.top]).lat,
+                lng: map.containerPointToLatLng([e.clientX - rect.left, e.clientY - rect.top]).lng,
+            };
+
+            /* SVG overlay for the drag rectangle */
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.classList.add('area-rect-svg');
+            svg.style.width = mapContainer.clientWidth + 'px';
+            svg.style.height = mapContainer.clientHeight + 'px';
+
+            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            const pattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+            pattern.setAttribute('id', 'area-hatch');
+            pattern.setAttribute('width', '8');
+            pattern.setAttribute('height', '8');
+            pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+            const patLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            patLine.setAttribute('x1', '0'); patLine.setAttribute('y1', '0');
+            patLine.setAttribute('x2', '8'); patLine.setAttribute('y2', '8');
+            patLine.setAttribute('stroke', '#00c8b4'); patLine.setAttribute('stroke-width', '0.6');
+            patLine.setAttribute('opacity', '0.25');
+            pattern.appendChild(patLine);
+            defs.appendChild(pattern);
+            svg.appendChild(defs);
+
+            const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            r.setAttribute('rx', '6');
+            r.setAttribute('ry', '6');
+            r.setAttribute('fill', 'url(#area-hatch)');
+            r.setAttribute('stroke', '#00c8b4');
+            r.setAttribute('stroke-width', '1.5');
+            r.setAttribute('stroke-dasharray', '6 3');
+            svg.appendChild(r);
+
+            mapContainer.appendChild(svg);
+            areaRect = { svgEl: svg, rectEl: r };
+        });
+
+        mapContainer.addEventListener('mousemove', function (e) {
+            if (activeMode !== 'area' || !areaDragStart || !areaRect) return;
+
+            const rect = mapContainer.getBoundingClientRect();
+            const curX = e.clientX - rect.left;
+            const curY = e.clientY - rect.top;
+
+            const x = Math.min(areaDragStart.x, curX);
+            const y = Math.min(areaDragStart.y, curY);
+            const w = Math.abs(curX - areaDragStart.x);
+            const h = Math.abs(curY - areaDragStart.y);
+
+            areaRect.rectEl.setAttribute('x', x);
+            areaRect.rectEl.setAttribute('y', y);
+            areaRect.rectEl.setAttribute('width', w);
+            areaRect.rectEl.setAttribute('height', h);
+        });
+
+        mapContainer.addEventListener('mouseup', function (e) {
+            if (activeMode !== 'area' || !areaDragStart || !areaRect) return;
+
+            const rect = mapContainer.getBoundingClientRect();
+            const curX = e.clientX - rect.left;
+            const curY = e.clientY - rect.top;
+
+            const minSide = 15;
+            if (Math.abs(curX - areaDragStart.x) < minSide ||
+                Math.abs(curY - areaDragStart.y) < minSide) {
+                clearAreaDrag();
+                return;
+            }
+
+            /* compute geographic corners */
+            const sw = map.containerPointToLatLng([
+                Math.min(areaDragStart.x, curX),
+                Math.max(areaDragStart.y, curY),
+            ]);
+            const ne = map.containerPointToLatLng([
+                Math.max(areaDragStart.x, curX),
+                Math.min(areaDragStart.y, curY),
+            ]);
+            areaCorners = { sw, ne };
+
+            /* show area popup */
+            showAreaPopup(sw, ne, curX, curY);
+
+            setMode(null);
+            map.dragging.enable();
+            areaDragStart = null;
+        });
+
+        // function showAreaPopup(sw, ne, px, py) {
+        //     if (areaPopupEl) areaPopupEl.remove();
+
+        //     const el = document.createElement('div');
+        //     el.className = 'area-popup';
+
+        //     const latSpan = Math.abs(ne.lat - sw.lat).toFixed(5);
+        //     const lngSpan = Math.abs(ne.lng - sw.lng).toFixed(5);
+
+        //     const boatOptions = boats.map(b => `
+        //         <div class="wp-boat-opt" id="area-opt-${b.id}"
+        //             onclick="assignArea('${b.id}')">
+        //         <div class="wp-dot" style="background:${b.color};color:${b.color}"></div>
+        //         <span>${b.name}</span>
+        //         <span class="wp-sent">✓ NOTED</span>
+        //         </div>`).join('');
+
+        //     el.innerHTML = `
+        //         <div class="wp-popup-title">Area Selected</div>
+        //         <div class="area-info">
+        //         SW: ${sw.lat.toFixed(5)}, ${sw.lng.toFixed(5)}<br>
+        //         NE: ${ne.lat.toFixed(5)}, ${ne.lng.toFixed(5)}<br>
+        //         Δlat ${latSpan} · Δlng ${lngSpan}
+        //         </div>
+        //         <div class="wp-boat-list">${boatOptions}</div>
+        //         <button class="wp-cancel-btn" onclick="clearAreaDrag()">Dismiss</button>`;
+
+        //     /* position popup near drag end point */
+        //     const mapW = mapContainer.clientWidth;
+        //     let left = px + 14;
+        //     if (left + 230 > mapW - 8) left = px - 230 - 14;
+
+        //     el.style.position = 'absolute';
+        //     el.style.left = left + 'px';
+        //     el.style.top = Math.max(8, py - 80) + 'px';
+        //     el.style.zIndex = 9000;
+
+        //     mapContainer.appendChild(el);
+        //     areaPopupEl = el;
+        // }
+        function showAreaPopup(sw, ne, px, py) {
+            if (areaPopupEl) areaPopupEl.remove();
+
+            const el = document.createElement('div');
+            el.className = 'area-popup';
+
+            const latSpan = Math.abs(ne.lat - sw.lat).toFixed(5);
+            const lngSpan = Math.abs(ne.lng - sw.lng).toFixed(5);
+
+            const boatOptions = boats.length > 0
+                ? boats.map(b => `
+                    <div class="wp-boat-opt" id="area-opt-${b.id}"
+                        onclick="assignArea('${b.id}')">
+                    <div class="wp-dot" style="background:${b.color};color:${b.color}"></div>
+                    <span>${b.name}</span>
+                    <span class="wp-sent">✓ LOCKED</span>
+                    </div>`).join('')
+                : `<div style="font-size:11px;color:#5a7a9a;padding:4px 0">No vessels online yet</div>`;
+
+            el.innerHTML = `
+                <div class="wp-popup-title">Area Selected</div>
+                <div class="area-info">
+                SW: ${sw.lat.toFixed(5)}, ${sw.lng.toFixed(5)}<br>
+                NE: ${ne.lat.toFixed(5)}, ${ne.lng.toFixed(5)}<br>
+                Δlat ${latSpan} · Δlng ${lngSpan}
+                </div>
+                <div class="wp-boat-list">${boatOptions}</div>
+                <button class="wp-cancel-btn" onclick="clearAreaDrag()">Cancel</button>`;
+
+            /* position near drag end, clamp to map bounds */
+            const mapW = mapContainer.clientWidth;
+            let left = px + 14;
+            if (left + 230 > mapW - 8) left = px - 230 - 14;
+
+            el.style.position = 'absolute';
+            el.style.left = Math.max(8, left) + 'px';
+            el.style.top = Math.max(8, py - 80) + 'px';
+            el.style.zIndex = 9000;
+
+            mapContainer.appendChild(el);
+            areaPopupEl = el;
+        }
+
+        /* prototype-only: just marks the option as noted, no data sent */
+        // function assignArea(boatId) {
+        //     const optEl = document.getElementById(`area-opt-${boatId}`);
+        //     if (optEl) optEl.classList.add('sent');
+        //     console.log('Area assigned (prototype) to', boatId, areaCorners);
+        // }
+        function assignArea(boatId) {
+            const boat = boats.find(b => b.id === boatId);
+            if (!boat || !areaRect || !areaCorners) return;
+
+            /* mark option as noted in popup */
+            document.querySelectorAll('[id^="area-opt-"]').forEach(el => {
+                el.classList.toggle('sent', el.id === `area-opt-${boatId}`);
+            });
+
+            /* detach the svg from the container and re-attach
+               so it persists independently of the drag state */
+            const svg = areaRect.svgEl;
+
+            /* recolor border to match the chosen boat */
+            const r = areaRect.rectEl;
+            r.setAttribute('stroke', boat.color);
+
+            /* update the hatch pattern color */
+            const patLine = svg.querySelector('pattern line');
+            if (patLine) patLine.setAttribute('stroke', boat.color);
+
+            /* mark as persistent so clearAreaDrag won't remove it */
+            persistentAreas.push({ svgEl: svg });
+            areaRect = null;   /* detach from drag state WITHOUT removing from DOM */
+
+            /* close popup */
+            if (areaPopupEl) { areaPopupEl.remove(); areaPopupEl = null; }
+            areaCorners = null;
+
+            console.log('Area locked for', boatId, areaCorners);
+        }
+
+        // function clearAreaDrag() {
+        //     if (areaRect) { areaRect.svgEl.remove(); areaRect = null; }
+        //     if (areaPopupEl) { areaPopupEl.remove(); areaPopupEl = null; }
+        //     areaDragStart = null;
+        //     areaCorners = null;
+        // }
+        function clearAreaDrag() {
+            /* only removes the in-progress drag rect, not persistent ones */
+            if (areaRect) { areaRect.svgEl.remove(); areaRect = null; }
+            if (areaPopupEl) { areaPopupEl.remove(); areaPopupEl = null; }
+            areaDragStart = null;
+            areaCorners = null;
+        }
+
+        /* ────────────────────────────
+           ESC to cancel active mode
+        ──────────────────────────── */
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                if (activeMode) setMode(null);
+                clearAreaDrag();
+            }
+        });
+
+    </script>
+
     <!-- <script>
         // helper: generate unique human ID
         let humanCount = 1;
