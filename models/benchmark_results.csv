@@ -1,0 +1,4 @@
+Model,Model Size (MB),Avg FPS,Avg Inference (ms),Avg CPU (%),Avg RAM (MB),Frames,Detections
+YOLOv8n,6.25,9.88,110.22,73.12,607.17,521,521
+YOLO11n,5.35,9.31,116.13,80.66,604.86,495,493
+MobileNetSSD,4.35,24.42,41.72,23.51,517.02,1281,1281
