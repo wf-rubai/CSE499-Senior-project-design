@@ -56,7 +56,8 @@ But you should be careful around the \(0^\circ/360^\circ\) boundary. We'll deal 
 Your goal has its own direction relative to the boat:
 
 $$
-\theta_{\text{goal}}=
+\theta_{\text{goal}}
+=
 \operatorname{atan2}(y_g-y,x_g-x)-\theta_{\text{boat}}
 $$
 
