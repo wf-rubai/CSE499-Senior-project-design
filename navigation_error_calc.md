@@ -32,7 +32,7 @@ $$
 }
 $$
 
-But you should be careful around the \(0^\circ/360^\circ\) boundary. We'll deal with that in code later.
+But you should be careful around the \(0°/360°\) boundary. We'll deal with that in code later.
 
 ---
 
@@ -75,11 +75,11 @@ $$
 
 So:
 
-* \(0^\circ\) → perfect direction
-* \(10^\circ\) → very good
-* \(45^\circ\) → worse
-* \(90^\circ\) → very bad
-* \(180^\circ\) → completely opposite
+* \(0°\) → perfect direction
+* \(10°\) → very good
+* \(45°\) → worse
+* \(90°\) → very bad
+* \(180°\) → completely opposite
 
 ---
 
@@ -204,9 +204,9 @@ Suppose you have three gaps:
 
 | Gap |        Center |         Width |  Goal angle |
 | --- | ------------: | ------------: | ----------: |
-| A   |  \(10^\circ\) |  \(15^\circ\) | \(0^\circ\) |
-| B   |  \(25^\circ\) |  \(60^\circ\) | \(0^\circ\) |
-| C   | \(-40^\circ\) | \(100^\circ\) | \(0^\circ\) |
+| A   |  \(10°\) |  \(15°\) | \(0°\) |
+| B   |  \(25°\) |  \(60°\) | \(0°\) |
+| C   | \(-40°\) | \(100°\) | \(0°\) |
 
 You might initially use:
 
@@ -218,7 +218,7 @@ $$
 w_g=0.4
 $$
 
-Assume \(W_{\theta,\max}=100^\circ\).
+Assume \(W_{\theta,\max}=100°\).
 
 ### Gap A
 
@@ -412,7 +412,7 @@ $$
 R_{\min}=0.5m
 $$
 
-so it can't instantly turn \(70^\circ\).
+so it can't instantly turn \(70°\).
 
 Therefore your cost should eventually become:
 
