@@ -474,14 +474,7 @@
         }
 
         .modal-input-row input[type=color] {
-            width: 42px;
-            height: 32px;
-            border: none;
-            background: none;
-            cursor: pointer;
-            padding: 0;
-            border-radius: 4px;
-            overflow: hidden
+            display: none;
         }
 
         .modal-input-row input[type=text] {
@@ -491,7 +484,7 @@
             border-radius: 4px;
             color: var(--text);
             font-family: 'Orbitron', monospace;
-            font-size: 13px;
+            font-size: 10px;
             padding: 6px 10px;
             letter-spacing: 0.08em;
             outline: none;
@@ -863,7 +856,7 @@
                 </svg>
             </div>
             <div class="logo-text">
-                <h1>BOATTRACK</h1>
+                <h1>ONNESHI</h1>
                 <p>Autonomous USV Routing System</p>
             </div>
         </div>
@@ -920,7 +913,6 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script>
-
         const boats = [];
         const humanTargets = [];
         const boatStatus = {};
@@ -1578,6 +1570,8 @@
            object used by all toggle fns)
            and properly creates sidebar cards.
         ════════════════════════════ */
+        data = {name: "boat1", human: 0, lat: 23.815, lon: 90.427, hdg: 140};
+        processPicoData(data);
         function processPicoData(data) {
             const { name, human, lat, lon } = data;
             if (!name || lat == null || lon == null) return;
@@ -1617,30 +1611,30 @@
                 card.id = `card-${boat.id}`;
                 card.style.setProperty('--boat-color', boat.color);
                 card.innerHTML = `
-      <div class="boat-card-inner">
-        <div class="boat-icon-wrap" id="iconwrap-${boat.id}"
-             style="border-color:${boat.color};color:${boat.color}">
-          ${miniBoatSvg(boat.color)}
-        </div>
-        <div class="boat-info">
-          <div class="boat-name" id="name-${boat.id}" style="color:${boat.color}">${boat.name}</div>
-          <div class="boat-meta" id="meta-${boat.id}">0 waypoints · hdg ${hdg}° · hidden</div>
-        </div>
-        <div class="boat-actions">
-          <button class="icon-btn" title="Edit color" onclick="openModal('${boat.id}')">
-            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-              <circle cx="7" cy="7" r="3.5" stroke="currentColor" stroke-width="1.3"/>
-              <circle cx="7" cy="7" r="1" fill="currentColor"/>
-              <line x1="7" y1="0" x2="7" y2="3" stroke="currentColor" stroke-width="1.3"/>
-              <line x1="7" y1="11" x2="7" y2="14" stroke="currentColor" stroke-width="1.3"/>
-              <line x1="0" y1="7" x2="3" y2="7" stroke="currentColor" stroke-width="1.3"/>
-              <line x1="11" y1="7" x2="14" y2="7" stroke="currentColor" stroke-width="1.3"/>
-            </svg>
-          </button>
-        </div>
-        <div class="swatch-btn" id="swatch-${boat.id}"
-             style="background:${boat.color}" onclick="openModal('${boat.id}')"></div>
-      </div>`;
+                    <div class="boat-card-inner">
+                        <div class="boat-icon-wrap" id="iconwrap-${boat.id}"
+                            style="border-color:${boat.color};color:${boat.color}">
+                        ${miniBoatSvg(boat.color)}
+                        </div>
+                        <div class="boat-info">
+                        <div class="boat-name" id="name-${boat.id}" style="color:${boat.color}">${boat.name}</div>
+                        <div class="boat-meta" id="meta-${boat.id}">0 waypoints · hdg ${hdg}° · hidden</div>
+                        </div>
+                        <div class="boat-actions">
+                        <button class="icon-btn" title="Edit color" onclick="openModal('${boat.id}')">
+                            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                            <circle cx="7" cy="7" r="3.5" stroke="currentColor" stroke-width="1.3"/>
+                            <circle cx="7" cy="7" r="1" fill="currentColor"/>
+                            <line x1="7" y1="0" x2="7" y2="3" stroke="currentColor" stroke-width="1.3"/>
+                            <line x1="7" y1="11" x2="7" y2="14" stroke="currentColor" stroke-width="1.3"/>
+                            <line x1="0" y1="7" x2="3" y2="7" stroke="currentColor" stroke-width="1.3"/>
+                            <line x1="11" y1="7" x2="14" y2="7" stroke="currentColor" stroke-width="1.3"/>
+                            </svg>
+                        </button>
+                        </div>
+                        <div class="swatch-btn" id="swatch-${boat.id}"
+                            style="background:${boat.color}" onclick="openModal('${boat.id}')"></div>
+                    </div>`;
 
                 card.addEventListener('click', e => {
                     if (e.target.closest('.icon-btn') || e.target.closest('.swatch-btn')) return;

@@ -11,3 +11,9 @@ Report: https://www.overleaf.com/read/ggkjwyzkmcnx#58e340
 
 Washio Ferdous
 GitHub: https://github.com/wf-rubai
+
+
+## phone hotspot
+IP:       172.20.10.2
+Mask:     255.255.255.240
+Router:   172.20.10.1
