@@ -1570,8 +1570,19 @@
            object used by all toggle fns)
            and properly creates sidebar cards.
         ════════════════════════════ */
-        data = {name: "boat1", human: 0, lat: 23.815, lon: 90.427, hdg: 140};
-        processPicoData(data);
+        // data = [
+        //     {name: "boat1", human: 0, lat: 23.80804562709265, lon: 90.43026201457326, hdg: 0},
+        //     {name: "boat1", human: 0, lat: 23.808021922763714, lon: 90.43028389863869, hdg: 140},
+        //     {name: "boat1", human: 0, lat: 23.808010631820828, lon: 90.43028611952668, hdg: -90},
+        //     {name: "boat1", human: 1, lat: 23.80799004200425, lon: 90.43028216516709, hdg: -90},
+        //     {name: "boat1", human: 1, lat: 23.807973134029908, lon: 90.43028289185348, hdg: 14-900},
+        //     {name: "boat1", human: 1, lat: 23.80796045994447, lon: 90.43028520016043, hdg: -90},
+        // ];
+
+        for (const d of data){
+            processPicoData(d);
+        }
+        // processPicoData(data);
         function processPicoData(data) {
             const { name, human, lat, lon } = data;
             if (!name || lat == null || lon == null) return;
@@ -1586,7 +1597,8 @@
                 boat = {
                     id: name,
                     name: name.toUpperCase(),
-                    color: getRandomColor(),
+                    // color: getRandomColor(),
+                    color: '#ffffff',
                     waypoints: [],
                 };
                 boats.push(boat);
@@ -1709,15 +1721,67 @@
         /* ════════════════════════════
            POLLING LOOP
         ════════════════════════════ */
+        // setInterval(async () => {
+        //     try {
+        //         const res = await fetch('http://localhost:5001/data');
+        //         const data = await res.json();
+        //         processPicoData(data);
+        //     } catch (e) {
+        //         console.warn('Poll error:', e);
+        //     }
+        // }, 100);
+
+        /* ════════════════════════════
+        POLLING LOOP
+        ════════════════════════════ */
         setInterval(async () => {
             try {
                 const res = await fetch('http://localhost:5001/data');
                 const data = await res.json();
-                processPicoData(data);
+
+                const filteredData = filterGPSNoice(data);
+                processPicoData(filteredData);
+
             } catch (e) {
                 console.warn('Poll error:', e);
             }
-        }, 1000);
+        }, 100);
+
+        const gpsHistory = {};
+        const WINDOW_SIZE = 10;
+
+        function filterGPSNoice(data) {
+            const name = data.name;
+
+            // Create separate history for each boat
+            if (!gpsHistory[name]) {
+                gpsHistory[name] = [];
+            }
+
+            const history = gpsHistory[name];
+
+            // Store the new waypoint
+            history.push({
+                lat: Number(data.lat),
+                lon: Number(data.lon)
+            });
+
+            // Keep only the last 4 waypoints
+            if (history.length > WINDOW_SIZE) {
+                history.shift();
+            }
+
+            // Calculate moving average
+            const lat = history.reduce((sum, p) => sum + p.lat, 0) / history.length;
+            const lon = history.reduce((sum, p) => sum + p.lon, 0) / history.length;
+
+            // Return a copy so other data remains unchanged
+            return {
+                ...data,
+                lat: lat,
+                lon: lon
+            };
+        }
     </script>
 
     <script>

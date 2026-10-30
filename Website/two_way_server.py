@@ -34,6 +34,7 @@ def serial_reader():
 
             try:
                 data = json.loads(line)
+                
 
                 with lock:
                     latest_data = data
